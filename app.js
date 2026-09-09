@@ -566,10 +566,12 @@ function crearTarjetaAlumnoSemanal(alumno, dias, hoy) {
   const div = document.createElement('div');
   div.className = 'tarjeta-alumno';
 
+  const pasaHora = horaActualPasaLimite(estado.config.hora_limite);
+
   const diasHtml = dias.map(fecha => {
     const va = (estado.asistenciaSemana[alumno.id] || {})[fecha];
     const esHoy = fecha === hoy;
-    const esPasado = fecha < hoy;
+    const esPasado = fecha < hoy || (esHoy && pasaHora);
     const [, , d] = fecha.split('-');
     const nombreDia = new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'short' });
     const etiqueta = nombreDia.charAt(0).toUpperCase() + nombreDia.slice(1, 3);
