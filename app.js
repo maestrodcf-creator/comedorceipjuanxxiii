@@ -1070,7 +1070,7 @@ function renderPanelAdmin() {
       </div>
       <div class="contenido">
         <div class="tabs-admin">
-          <button class="tab-admin ${estado.tabAdminActiva === 'alumnos' ? 'activa' : ''}" onclick="cambiarTabAdmin('alumnos')">Alumnos</button>
+          <button class="tab-admin ${estado.tabAdminActiva === 'alumnos' ? 'activa' : ''}" onclick="cambiarTabAdmin('alumnos')">Alumnado</button>
           <button class="tab-admin ${estado.tabAdminActiva === 'familias' ? 'activa' : ''}" onclick="cambiarTabAdmin('familias')">Familias</button>
           <button class="tab-admin ${estado.tabAdminActiva === 'clases' ? 'activa' : ''}" onclick="cambiarTabAdmin('clases')">Clases</button>
           <button class="tab-admin ${estado.tabAdminActiva === 'estadisticas' ? 'activa' : ''}" onclick="cambiarTabAdmin('estadisticas')">Estadísticas</button>
@@ -1139,7 +1139,7 @@ function renderTabAlumnos() {
 
     <div class="tarjeta-admin">
       <div class="form-grupo" style="margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
-        <label style="margin-bottom:0">Alumnos (${estado.alumnosAdmin.length})</label>
+        <label style="margin-bottom:0">Alumnado (${estado.alumnosAdmin.length})</label>
         <div style="display:flex;gap:6px">
           <button class="btn-mini azul" onclick="toggleModoSeleccion('unificar')">${estado.modoSeleccion === 'unificar' ? 'Cancelar' : '🔗 Unificar'}</button>
           <button class="btn-mini rojo" onclick="toggleModoSeleccion('eliminar')">${estado.modoSeleccion === 'eliminar' ? 'Cancelar' : '🗑️ Eliminar varios'}</button>
@@ -1174,16 +1174,31 @@ function renderTabAlumnos() {
 }
 
 function renderFilasAlumnosAdmin(lista) {
-  return lista.map(a => `
+  const opcionesClase = estado.clasesAdmin
+    .map(c => `<option value="${c.id}" ${c.id === lista[0]?.clase_id ? '' : ''}>${escapeHtml(c.nombre)}</option>`)
+    .join('');
+
+  return lista.map(a => {
+    const opciones = estado.clasesAdmin
+      .map(c => `<option value="${c.id}" ${c.id === a.clase_id ? 'selected' : ''}>${escapeHtml(c.nombre)}</option>`)
+      .join('');
+
+    return `
     <div class="fila-lista-admin" data-nombre-busqueda="${escapeHtml((a.nombre + ' ' + a.apellidos).toLowerCase())}">
       ${estado.modoSeleccion ? `<input type="checkbox" class="check-seleccion" data-id="${a.id}" data-familia="${a.familia_id}" style="width:20px;height:20px;margin-right:4px">` : ''}
-      <div class="fila-lista-admin-info">
+      <div class="fila-lista-admin-info" style="flex:1;min-width:0">
         <div class="fila-lista-admin-nombre">${escapeHtml(a.nombre)} ${escapeHtml(a.apellidos)}</div>
-        <div class="fila-lista-admin-detalle">${escapeHtml(a.clase_nombre)} · ${escapeHtml(a.familia_nombre)} (${a.familia_pin})</div>
+        <div class="fila-lista-admin-detalle">${escapeHtml(a.familia_nombre)} (${a.familia_pin})</div>
+        ${!estado.modoSeleccion ? `
+          <select class="select-clase-inline" onchange="cambiarClaseAlumno('${a.id}', this.value, this)">
+            ${opciones}
+          </select>
+        ` : ''}
       </div>
-      ${!estado.modoSeleccion ? `<button class="btn-mini rojo" onclick="eliminarAlumno('${a.id}', '${escapeHtml(a.nombre)}')">Eliminar</button>` : ''}
+      ${!estado.modoSeleccion ? `<button class="btn-mini rojo" style="margin-left:6px;flex-shrink:0" onclick="eliminarAlumno('${a.id}', '${escapeHtml(a.nombre)}')">Eliminar</button>` : ''}
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function filtrarListaAlumnos(texto) {
@@ -1224,6 +1239,29 @@ async function crearAlumno() {
     renderTabAlumnos();
   } catch (e) {
     mostrarToast('No se pudo crear el alumno/a.');
+  }
+}
+
+async function cambiarClaseAlumno(alumnoId, claseId, selectEl) {
+  const alumno = estado.alumnosAdmin.find(a => a.id === alumnoId);
+  if (!alumno) return;
+  try {
+    await rpc('comedor_admin_editar_alumno', {
+      p_pin: estado.pinAdmin,
+      p_id: alumnoId,
+      p_nombre: alumno.nombre,
+      p_apellidos: alumno.apellidos,
+      p_clase_id: claseId,
+      p_observaciones: alumno.observaciones || null
+    });
+    const claseNombre = estado.clasesAdmin.find(c => c.id === claseId)?.nombre || '';
+    mostrarToast(`Clase actualizada → ${claseNombre} ✓`, 2000);
+    await cargarAlumnosAdmin();
+    const busqueda = document.getElementById('buscador-alumnos')?.value || '';
+    document.getElementById('lista-alumnos-admin').innerHTML = renderFilasAlumnosAdmin(estado.alumnosAdmin);
+    if (busqueda) filtrarListaAlumnos(busqueda);
+  } catch (e) {
+    mostrarToast('No se pudo cambiar la clase.');
   }
 }
 
