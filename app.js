@@ -560,6 +560,7 @@ function renderPanelFamilias() {
         <div class="cabecera-simple">
           <button class="btn-volver" onclick="salirDePerfil('familia')">‹</button>
           <h2>${estado.nombreFamilia ? escapeHtml(estado.nombreFamilia) : 'Tu familia'}</h2>
+          <button class="btn-cerrar-sesion" onclick="salirDePerfil('familia')">Cerrar sesión</button>
         </div>
         <div class="contenido">
           <div class="vacio-estado">
@@ -577,6 +578,7 @@ function renderPanelFamilias() {
       <div class="cabecera-simple">
         <button class="btn-volver" onclick="salirDePerfil('familia')">‹</button>
         <h2>${estado.nombreFamilia ? escapeHtml(estado.nombreFamilia) : 'Tu familia'}</h2>
+        <button class="btn-cerrar-sesion" onclick="salirDePerfil('familia')">Cerrar sesión</button>
       </div>
       <div class="contenido">
         <button class="accion-rapida" style="margin-bottom:1rem;border-color:var(--azul);color:var(--azul)" onclick="abrirMenuMensual()">📋 Ver menú del mes</button>
@@ -786,6 +788,7 @@ function renderPanelProfesorado() {
       <div class="cabecera-simple">
         <button class="btn-volver" onclick="salirDePerfil('profesorado')">‹</button>
         <h2>${estado.claseProfesoradoNombre ? escapeHtml(estado.claseProfesoradoNombre) : 'Tu clase'}</h2>
+        <button class="btn-cerrar-sesion" onclick="salirDePerfil('profesorado')">Cerrar sesión</button>
       </div>
       <div class="contenido">
         <button class="accion-rapida" style="margin-bottom:1.25rem;border-color:var(--azul);color:var(--azul)" onclick="abrirMenuMensual()">📋 Ver menú del mes</button>
@@ -925,6 +928,7 @@ function renderPanelStaff() {
       <div class="cabecera-simple">
         <button class="btn-volver" onclick="salirDePerfil('staff')">‹</button>
         <h2>Listado del comedor</h2>
+        <button class="btn-cerrar-sesion" onclick="salirDePerfil('staff')">Cerrar sesión</button>
       </div>
       <div class="contenido">
         <div class="selector-fecha-staff">
@@ -1062,6 +1066,7 @@ function renderPanelAdmin() {
       <div class="cabecera-simple">
         <button class="btn-volver" onclick="salirDePerfil('admin')">‹</button>
         <h2>Administración</h2>
+        <button class="btn-cerrar-sesion" onclick="salirDePerfil('admin')">Cerrar sesión</button>
       </div>
       <div class="contenido">
         <div class="tabs-admin">
