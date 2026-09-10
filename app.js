@@ -121,23 +121,56 @@ async function rpc(nombre, params) {
 
 // ===== Sesión (persistencia local de PINs) =====
 
-function guardarSesion() {
-  localStorage.setItem('comedor_sesion', JSON.stringify({
+const TIEMPO_SESION = 20 * 60 * 1000; // 20 minutos
+
+function guardarSesion(recordar = false) {
+  const datos = {
     pinFamilia: estado.pinFamilia,
     pinStaff: estado.pinStaff,
     pinAdmin: estado.pinAdmin,
-    claveProfesorado: estado.claveProfesorado
-  }));
+    claveProfesorado: estado.claveProfesorado,
+    ts: Date.now(),
+    recordar
+  };
+  sessionStorage.setItem('comedor_sesion', JSON.stringify(datos));
+  if (recordar) {
+    localStorage.setItem('comedor_sesion', JSON.stringify(datos));
+  } else {
+    localStorage.removeItem('comedor_sesion');
+  }
 }
 
 function cargarSesion() {
   try {
-    const datos = JSON.parse(localStorage.getItem('comedor_sesion') || '{}');
+    // Primero sessionStorage (sesión activa), luego localStorage (recordada)
+    let raw = sessionStorage.getItem('comedor_sesion') || localStorage.getItem('comedor_sesion');
+    const datos = JSON.parse(raw || '{}');
+    if (!datos.ts) return;
+
+    const limite = datos.recordar ? 30 * 24 * 60 * 60 * 1000 : TIEMPO_SESION;
+    if (Date.now() - datos.ts > limite) {
+      sessionStorage.removeItem('comedor_sesion');
+      localStorage.removeItem('comedor_sesion');
+      return;
+    }
     estado.pinFamilia = datos.pinFamilia || null;
     estado.pinStaff = datos.pinStaff || null;
     estado.pinAdmin = datos.pinAdmin || null;
     estado.claveProfesorado = datos.claveProfesorado || null;
   } catch (e) {}
+}
+
+// Resetea el temporizador de 20 min cada vez que el usuario interactúa
+function registrarActividadUsuario() {
+  const recordar = (() => {
+    try {
+      const d = JSON.parse(localStorage.getItem('comedor_sesion') || '{}');
+      return !!d.recordar;
+    } catch { return false; }
+  })();
+  if (estado.pinFamilia || estado.pinStaff || estado.pinAdmin || estado.claveProfesorado) {
+    guardarSesion(recordar);
+  }
 }
 
 function salirDePerfil(tipo) {
@@ -342,6 +375,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     await cargarConfigPublica();
     render();
     registrarServiceWorker();
+    // Resetear temporizador de sesión con cualquier interacción del usuario
+    ['click', 'touchstart', 'keydown'].forEach(ev =>
+      document.addEventListener(ev, registrarActividadUsuario, { passive: true })
+    );
   } catch (e) {
     console.error('Error al arrancar la app:', e);
     mostrarErrorArranque(e.message || 'Error desconocido al iniciar la aplicación.');
@@ -410,6 +447,9 @@ function renderLoginFamilias() {
           <p class="ayuda">Es el código de 6 caracteres que te dio el centro</p>
           <div id="error-familia" class="mensaje-error"></div>
           <input id="input-pin-familia" class="pin-input" maxlength="6" placeholder="••••••" autocomplete="off" autocapitalize="characters">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
+            <input type="checkbox" id="recordar-familia" style="width:18px;height:18px"> Recordar en este dispositivo
+          </label>
           <button class="btn-principal verde" onclick="intentarLoginFamilia()">Entrar</button>
         </div>
       </div>
@@ -442,7 +482,8 @@ async function intentarLoginFamilia() {
     }
     estado.pinFamilia = pin;
     estado.nombreFamilia = fila.nombre_familia;
-    guardarSesion();
+    const recordar = document.getElementById('recordar-familia')?.checked || false;
+    guardarSesion(recordar);
     await cargarPanelFamilias();
   } catch (e) {
     errorBox.textContent = 'No se pudo comprobar el PIN. Inténtalo de nuevo.';
@@ -673,6 +714,9 @@ function renderLoginProfesorado() {
           <p class="ayuda">Introduce la clave de tu grupo</p>
           <div id="error-profesorado" class="mensaje-error"></div>
           <input id="input-clave-profesorado" class="pin-input" placeholder="Ej. 4A" autocomplete="off" autocapitalize="characters">
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
+            <input type="checkbox" id="recordar-profesorado" style="width:18px;height:18px"> Recordar en este dispositivo
+          </label>
           <button class="btn-principal verde" onclick="intentarLoginProfesorado()">Entrar</button>
         </div>
       </div>
@@ -705,7 +749,8 @@ async function intentarLoginProfesorado() {
     }
     estado.claveProfesorado = clave;
     estado.claseProfesoradoNombre = fila.clase_nombre;
-    guardarSesion();
+    const recordar = document.getElementById('recordar-profesorado')?.checked || false;
+    guardarSesion(recordar);
     await cargarPanelProfesorado();
   } catch (e) {
     errorBox.textContent = 'No se pudo comprobar la clave. Inténtalo de nuevo.';
