@@ -590,10 +590,10 @@ async function cargarPanelFamilias() {
       return;
     }
 
-    // Cargamos asistencia de las dos semanas visibles (actual + siguiente si es domingo)
+    // Cargamos asistencia de las dos semanas (esta + siguiente) siempre
     const semanas = semanasFamilia();
     const desde = semanas[0].dias[0];
-    const hasta = semanas[semanas.length - 1].dias[6]; // domingo (índice 6 en semana L-D)
+    const hasta = semanas[semanas.length - 1].dias[6]; // domingo de la semana siguiente
 
     const [filas, bloqResp] = await Promise.all([
       rpc('comedor_asistencia_familia', { p_pin: estado.pinFamilia, p_desde: desde, p_hasta: hasta }),
@@ -612,67 +612,53 @@ async function cargarPanelFamilias() {
       estado.diasBloqueados[b.fecha] = b.motivo || '';
     });
 
-    estado.tabFamiliaActiva = 'semana';
+    estado.tabFamiliaActiva = null; // renderPanelFamilias elegirá el tab correcto según el día
     navegar('panel-familias');
-    setTimeout(() => {
-      const cont = document.getElementById('bloques-semana-familia');
-      if (cont) {
-        const hoy = hoyISO();
-        semanasFamilia().forEach(semana => {
-          const bloque = document.createElement('div');
-          bloque.innerHTML = `<div class="etiqueta-semana">${semana.label}</div>`;
-          estado.alumnos.forEach(alumno => bloque.appendChild(crearTarjetaAlumnoSemanal(alumno, semana.dias, hoy)));
-          cont.appendChild(bloque);
-        });
-      }
-    }, 0);
   } catch (e) {
     mostrarToast('No se pudo cargar la información. Comprueba tu conexión.');
     navegar('inicio');
   }
 }
 
-// Calcula qué semanas son visibles para la familia.
-// A partir del domingo, se muestra también la semana siguiente.
+// Calcula los datos de las dos semanas para la familia.
+// Devuelve siempre ambas semanas; la siguiente incluye `bloqueada: true`
+// cuando todavía no es viernes (lunes–jueves).
 function semanasFamilia() {
   const hoy = hoyISO();
   const [y, m, d] = hoy.split('-').map(Number);
-  const diaSemana = new Date(y, m - 1, d).getDay(); // 0=dom, 1=lun...6=sab
-  const pasaHora = horaActualPasaLimite(estado.config.hora_limite);
+  const diaSemana = new Date(y, m - 1, d).getDay(); // 0=dom, 1=lun…6=sab
 
-  // Lunes de esta semana (7 días: L-D)
+  // Lunes de esta semana (semana L-D)
   const diasHastaLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
   const lunesEsta = sumarDias(hoy, diasHastaLunes);
   const diasEsta = [0, 1, 2, 3, 4, 5, 6].map(i => sumarDias(lunesEsta, i));
 
-  // Lunes de la semana siguiente (7 días: L-D)
+  // Lunes de la semana siguiente
   const lunesSig = sumarDias(lunesEsta, 7);
-  const diasSig = [0, 1, 2, 3, 4, 5, 6].map(i => sumarDias(lunesSig, i));
+  const diasSig  = [0, 1, 2, 3, 4, 5, 6].map(i => sumarDias(lunesSig, i));
 
-  // La semana actual desaparece cuando:
-  // - Es viernes (5) y ya pasó la hora límite → semana completamente bloqueada
-  // - Es sábado (6) o domingo (0) → semana ya terminada
-  const semanaActualTerminada =
-    diaSemana === 6 ||  // sábado
-    diaSemana === 0 ||  // domingo
-    (diaSemana === 5 && pasaHora); // viernes después de la hora límite
+  // La semana actual desaparece el sábado y domingo
+  // (el viernes sigue visible pero ya con advertencia de hora límite)
+  const semanaActualTerminada = diaSemana === 6 || diaSemana === 0;
+
+  // La semana siguiente está bloqueada de lunes (1) a jueves (4).
+  // Se desbloquea a partir del viernes (5) y permanece activa sáb (6) y dom (0).
+  const siguienteBloqueada = diaSemana >= 1 && diaSemana <= 4;
 
   const semanas = [];
 
   if (!semanaActualTerminada) {
-    semanas.push({ label: 'Esta semana', dias: diasEsta });
+    semanas.push({ key: 'semana', label: 'Esta semana', dias: diasEsta, bloqueada: false });
   }
 
-  // La semana siguiente siempre es visible desde el viernes a las 10:00,
-  // sábado, domingo, o lunes (para que siempre haya algo que confirmar)
-  const mostrarSiguiente =
-    semanaActualTerminada ||
-    diaSemana === 1 || // lunes, para que puedan ver toda la semana desde el principio
-    (diaSemana === 5 && pasaHora);
-
-  if (mostrarSiguiente || semanas.length === 0) {
-    semanas.push({ label: semanaActualTerminada ? 'Semana del ' + formatearFechaCorta(lunesSig) : 'Semana siguiente', dias: diasSig });
-  }
+  semanas.push({
+    key: 'siguiente',
+    label: semanaActualTerminada
+      ? 'Semana del ' + formatearFechaCorta(lunesSig)
+      : 'Semana siguiente',
+    dias: diasSig,
+    bloqueada: siguienteBloqueada
+  });
 
   return semanas;
 }
@@ -681,7 +667,20 @@ function renderPanelFamilias() {
   const hoy = hoyISO();
   const pasaHora = horaActualPasaLimite(estado.config.hora_limite);
   const semanas = semanasFamilia();
-  const tabActiva = estado.tabFamiliaActiva || 'semana';
+
+  // Determina tab activa por defecto según el día
+  const semanaActualExiste = semanas.some(s => s.key === 'semana');
+  if (!estado.tabFamiliaActiva) {
+    estado.tabFamiliaActiva = semanaActualExiste ? 'semana' : 'siguiente';
+  }
+  // Si estaban en 'semana' pero ya no existe (sáb/dom), pasar a 'siguiente'
+  if (estado.tabFamiliaActiva === 'semana' && !semanaActualExiste) {
+    estado.tabFamiliaActiva = 'siguiente';
+  }
+  const tabActiva = estado.tabFamiliaActiva;
+
+  const semSiguiente = semanas.find(s => s.key === 'siguiente');
+  const siguienteBloqueada = semSiguiente ? semSiguiente.bloqueada : true;
 
   if (estado.alumnos.length === 0) {
     app.innerHTML = `
@@ -702,6 +701,24 @@ function renderPanelFamilias() {
     return;
   }
 
+  // Construir tabs
+  const tabSemana = semanaActualExiste
+    ? `<button class="tab-familia ${tabActiva === 'semana' ? 'activa' : ''}" onclick="cambiarTabFamilia('semana')">📅 Esta semana</button>`
+    : '';
+  const tabSiguiente = siguienteBloqueada
+    ? `<button class="tab-familia bloqueado" title="Disponible a partir del viernes">🔒 Semana sig.</button>`
+    : `<button class="tab-familia ${tabActiva === 'siguiente' ? 'activa' : ''}" onclick="cambiarTabFamilia('siguiente')">📅 Semana sig.</button>`;
+  const tabHistorial = `<button class="tab-familia ${tabActiva === 'historial' ? 'activa' : ''}" onclick="cambiarTabFamilia('historial')">📋 Historial</button>`;
+
+  let contenidoInicial = '';
+  if (tabActiva === 'semana') {
+    contenidoInicial = renderContenidoSemanaFamilia(hoy, pasaHora, semanas.filter(s => s.key === 'semana'));
+  } else if (tabActiva === 'siguiente') {
+    contenidoInicial = renderContenidoSemanaFamilia(hoy, false, semanas.filter(s => s.key === 'siguiente'));
+  } else {
+    contenidoInicial = '<div class="cargando"><div class="spinner"></div>Cargando historial…</div>';
+  }
+
   app.innerHTML = `
     <div class="pantalla">
       <div class="cabecera-simple">
@@ -710,16 +727,34 @@ function renderPanelFamilias() {
         <button class="btn-cerrar-sesion" onclick="salirDePerfil('familia')">Cerrar sesión</button>
       </div>
       <div class="tabs-familia">
-        <button class="tab-familia ${tabActiva === 'semana' ? 'activa' : ''}" onclick="cambiarTabFamilia('semana')">📅 Esta semana</button>
-        <button class="tab-familia ${tabActiva === 'historial' ? 'activa' : ''}" onclick="cambiarTabFamilia('historial')">📋 Historial</button>
+        ${tabSemana}
+        ${tabSiguiente}
+        ${tabHistorial}
       </div>
       <div class="contenido" id="contenido-familia">
-        ${tabActiva === 'semana' ? renderContenidoSemanaFamilia(hoy, pasaHora, semanas) : '<div class="cargando"><div class="spinner"></div>Cargando historial…</div>'}
+        ${contenidoInicial}
       </div>
     </div>
   `;
 
-  if (tabActiva === 'historial') cargarHistorialFamilia();
+  if (tabActiva === 'historial') {
+    cargarHistorialFamilia();
+  } else {
+    // Renderizar tarjetas de alumnos en el contenedor
+    setTimeout(() => {
+      const cont = document.getElementById('bloques-semana-familia');
+      if (!cont) return;
+      const semanasActivas = tabActiva === 'semana'
+        ? semanas.filter(s => s.key === 'semana')
+        : semanas.filter(s => s.key === 'siguiente');
+      semanasActivas.forEach(semana => {
+        const bloque = document.createElement('div');
+        bloque.innerHTML = `<div class="etiqueta-semana">${semana.label}</div>`;
+        estado.alumnos.forEach(alumno => bloque.appendChild(crearTarjetaAlumnoSemanal(alumno, semana.dias, hoy)));
+        cont.appendChild(bloque);
+      });
+    }, 0);
+  }
 }
 
 function renderContenidoSemanaFamilia(hoy, pasaHora, semanas) {
@@ -737,22 +772,7 @@ function renderContenidoSemanaFamilia(hoy, pasaHora, semanas) {
 function cambiarTabFamilia(tab) {
   estado.tabFamiliaActiva = tab;
   renderPanelFamilias();
-  if (tab === 'semana') {
-    // Re-renderizar los bloques de semana
-    const cont = document.getElementById('bloques-semana-familia');
-    if (cont) {
-      const hoy = hoyISO();
-      const semanas = semanasFamilia();
-      semanas.forEach(semana => {
-        const bloque = document.createElement('div');
-        bloque.innerHTML = `<div class="etiqueta-semana">${semana.label}</div>`;
-        estado.alumnos.forEach(alumno => {
-          bloque.appendChild(crearTarjetaAlumnoSemanal(alumno, semana.dias, hoy));
-        });
-        cont.appendChild(bloque);
-      });
-    }
-  }
+  // El render de tarjetas ya se hace dentro de renderPanelFamilias con setTimeout
 }
 
 async function cargarHistorialFamilia() {
