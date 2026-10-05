@@ -1185,13 +1185,38 @@ async function cargarPanelProfesorado(fecha) {
   estado.fechaProfesoradoSeleccionada = f;
 
   try {
-    const listado = await rpc('comedor_listado_profesorado', { p_clave: estado.claveProfesorado, p_fecha: f });
+    const [listado, bloqResp] = await Promise.all([
+      rpc('comedor_listado_profesorado', { p_clave: estado.claveProfesorado, p_fecha: f }),
+      obtenerSupabaseClient().from('comedor_dias_bloqueados').select('fecha, motivo')
+    ]);
     estado.listadoProfesorado = listado || [];
+    estado.diasBloqueados = {};
+    ((bloqResp && bloqResp.data) || []).forEach(b => { estado.diasBloqueados[b.fecha] = b.motivo || ''; });
     navegar('panel-profesorado');
   } catch (e) {
     mostrarToast('No se pudo cargar el listado de tu clase.');
     navegar('inicio');
   }
+}
+
+function avisodiabloqueadoprofe(fecha) {
+  if (!fecha) return '';
+  const diaSem = new Date(fecha + 'T12:00:00').getDay();
+  const esFinDeSemana = diaSem === 0 || diaSem === 6;
+  if (esFinDeSemana) {
+    return `<div class="aviso-dia-bloqueado">
+      <span>📅</span>
+      <span>Este día es fin de semana — el comedor no está activo.</span>
+    </div>`;
+  }
+  if (estado.diasBloqueados[fecha] !== undefined) {
+    const motivo = estado.diasBloqueados[fecha] || 'No lectivo';
+    return `<div class="aviso-dia-bloqueado">
+      <span>🔒</span>
+      <span>Día bloqueado: <strong>${escapeHtml(motivo)}</strong> — los datos mostrados son del registro previo al bloqueo.</span>
+    </div>`;
+  }
+  return '';
 }
 
 function renderPanelProfesorado() {
@@ -1231,6 +1256,8 @@ function renderPanelProfesorado() {
             <div class="stat-label">No vienen</div>
           </div>
         </div>
+
+        ${avisodiabloqueadoprofe(f)}
 
         ${lista.length === 0 ? `
           <div class="vacio-estado">
@@ -1369,8 +1396,13 @@ async function cargarPanelStaff(fecha) {
   estado.fechaStaffSeleccionada = f;
 
   try {
-    const listado = await rpc('comedor_listado_staff', { p_pin: estado.pinStaff, p_fecha: f });
+    const [listado, bloqResp] = await Promise.all([
+      rpc('comedor_listado_staff', { p_pin: estado.pinStaff, p_fecha: f }),
+      obtenerSupabaseClient().from('comedor_dias_bloqueados').select('fecha, motivo')
+    ]);
     estado.listadoStaff = listado || [];
+    estado.diasBloqueados = {};
+    ((bloqResp && bloqResp.data) || []).forEach(b => { estado.diasBloqueados[b.fecha] = b.motivo || ''; });
     navegar('panel-staff');
   } catch (e) {
     mostrarToast('No se pudo cargar el listado.');
@@ -1421,6 +1453,8 @@ function renderPanelStaff() {
           <input type="date" id="input-fecha-staff" value="${f}" onchange="cambiarFechaStaff(this.value)">
           <button class="btn-icono-pequeno" onclick="cambiarDiaStaff(1)">›</button>
         </div>
+
+        ${avisodiabloqueadoprofe(f)}
 
         <div class="resumen-staff">
           <div class="stat-card">
