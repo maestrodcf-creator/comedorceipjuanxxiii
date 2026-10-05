@@ -40,20 +40,77 @@ function mostrarToast(mensaje, ms = 2400) {
 
 // ===== Menú mensual (consulta pública desde cualquier panel) =====
 
-async function abrirMenuMensual() {
-  mostrarToast('Buscando el menú…', 1500);
+// ===== MENÚS MÚLTIPLES =====
+// Estado local para los menús disponibles
+let _menusCargados = null;
+
+async function cargarMenusDisponibles() {
   try {
-    const cliente = obtenerSupabaseClient();
-    const { data, error } = await cliente.from('comedor_menu_actual').select('*').eq('id', 1).single();
-    if (error || !data || !data.ruta_storage) {
-      mostrarToast('Todavía no se ha subido ningún menú.');
-      return;
-    }
-    const { data: urlData } = cliente.storage.from('comedor-menu').getPublicUrl(data.ruta_storage);
-    window.open(urlData.publicUrl, '_blank');
+    const menus = await rpc('comedor_obtener_menus', {});
+    _menusCargados = menus || [];
+    return _menusCargados;
   } catch (e) {
-    mostrarToast('No se pudo abrir el menú.');
+    return [];
   }
+}
+
+async function abrirMenuMensual() {
+  const menus = await cargarMenusDisponibles();
+  if (!menus || menus.length === 0) {
+    mostrarToast('Todavía no se ha subido ningún menú.');
+    return;
+  }
+  if (menus.length === 1) {
+    // Solo uno: abrir directamente
+    _abrirMenuPorRuta(menus[0].ruta_storage);
+    return;
+  }
+  // Varios: mostrar modal con desplegable
+  _mostrarModalMenus(menus);
+}
+
+function _abrirMenuPorRuta(ruta) {
+  const cliente = obtenerSupabaseClient();
+  const { data } = cliente.storage.from('comedor-menu').getPublicUrl(ruta);
+  window.open(data.publicUrl, '_blank');
+}
+
+function _mostrarModalMenus(menus) {
+  // Eliminar modal previo si existe
+  const previo = document.getElementById('modal-menus');
+  if (previo) previo.remove();
+
+  const opciones = menus.map(m =>
+    `<option value="${escapeHtml(m.ruta_storage)}">${escapeHtml(m.nombre)}</option>`
+  ).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'modal-menus';
+  modal.style.cssText = `
+    position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;
+    display:flex;align-items:center;justify-content:center;padding:1.5rem
+  `;
+  modal.innerHTML = `
+    <div style="background:var(--crema);border-radius:var(--radio);padding:1.5rem;width:100%;max-width:360px;box-shadow:0 8px 32px rgba(0,0,0,0.25)">
+      <h3 style="margin:0 0 1rem;color:var(--marron);font-size:16px">📋 Selecciona el menú</h3>
+      <select id="select-menu-modal" style="width:100%;padding:10px 14px;border:2px solid var(--crema-oscuro);border-radius:var(--radio-sm);font-size:14px;background:var(--blanco);color:var(--marron);margin-bottom:1rem">
+        ${opciones}
+      </select>
+      <div style="display:flex;gap:10px">
+        <button class="btn-secundario" style="flex:1" onclick="document.getElementById('modal-menus').remove()">Cancelar</button>
+        <button class="btn-principal azul" style="flex:1" onclick="_abrirMenuSeleccionado()">Ver menú</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+function _abrirMenuSeleccionado() {
+  const sel = document.getElementById('select-menu-modal');
+  if (!sel || !sel.value) return;
+  _abrirMenuPorRuta(sel.value);
+  document.getElementById('modal-menus').remove();
 }
 
 function hoyISO() {
@@ -75,6 +132,12 @@ function formatearFechaLarga(fechaISO) {
   const fecha = new Date(y, m - 1, d);
   const opciones = { weekday: 'long', day: 'numeric', month: 'long' };
   return fecha.toLocaleDateString('es-ES', opciones);
+}
+
+function formatearFechaCorta(fechaISO) {
+  const [y, m, d] = fechaISO.split('-').map(Number);
+  const fecha = new Date(y, m - 1, d);
+  return fecha.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
 }
 
 function formatearFechaCorta(fechaISO) {
@@ -123,6 +186,7 @@ async function rpc(nombre, params) {
 // ===== Sesión (persistencia local de PINs) =====
 
 const TIEMPO_SESION = 20 * 60 * 1000; // 20 minutos
+const FECHA_INICIO_COMEDOR = '2026-09-10'; // Primer día de comedor del curso
 
 function guardarSesion(recordar = false) {
   const datos = {
@@ -175,7 +239,7 @@ function registrarActividadUsuario() {
 }
 
 function salirDePerfil(tipo) {
-  if (tipo === 'familia') { estado.pinFamilia = null; estado.alumnos = []; }
+  if (tipo === 'familia') { estado.pinFamilia = null; estado.alumnos = []; estado.asistenciaSemana = {}; estado.historialFamilia = []; estado.nombreFamilia = null; estado.tabFamiliaActiva = 'semana'; }
   if (tipo === 'staff') { estado.pinStaff = null; estado.listadoStaff = []; }
   if (tipo === 'admin') { estado.pinAdmin = null; }
   if (tipo === 'profesorado') { estado.claveProfesorado = null; estado.listadoProfesorado = []; }
@@ -284,6 +348,7 @@ function irAPerfil(tipo) {
 function cerrarOtrasSesiones(tipoQueEntra) {
   if (tipoQueEntra !== 'familias' && estado.pinFamilia) {
     estado.pinFamilia = null; estado.alumnos = []; estado.nombreFamilia = null;
+    estado.asistenciaSemana = {}; estado.historialFamilia = []; estado.tabFamiliaActiva = 'semana';
   }
   if (tipoQueEntra !== 'profesorado' && estado.claveProfesorado) {
     estado.claveProfesorado = null; estado.listadoProfesorado = []; estado.claseProfesoradoNombre = null;
@@ -376,13 +441,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     await cargarConfigPublica();
     render();
     registrarServiceWorker();
-    // Resetear temporizador de sesión con cualquier interacción del usuario
     ['click', 'touchstart', 'keydown'].forEach(ev =>
       document.addEventListener(ev, registrarActividadUsuario, { passive: true })
     );
+    // Ocultar splash screen con una pequeña pausa para que se vea el logo
+    setTimeout(() => {
+      const splash = document.getElementById('splash');
+      if (splash) {
+        splash.classList.add('oculto');
+        setTimeout(() => splash.remove(), 500);
+      }
+    }, 2500);
   } catch (e) {
     console.error('Error al arrancar la app:', e);
     mostrarErrorArranque(e.message || 'Error desconocido al iniciar la aplicación.');
+    const splash = document.getElementById('splash');
+    if (splash) splash.remove();
   }
 });
 
@@ -425,9 +499,22 @@ async function cargarConfigPublica() {
 }
 
 function registrarServiceWorker() {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  }
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('sw.js').then((registro) => {
+    // Detectar cuando hay una nueva versión instalada
+    registro.addEventListener('updatefound', () => {
+      const nuevoSW = registro.installing;
+      nuevoSW.addEventListener('statechange', () => {
+        if (nuevoSW.state === 'installed' && navigator.serviceWorker.controller) {
+          // Hay una versión nueva lista — recargar automáticamente
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            window.location.reload();
+          });
+          nuevoSW.postMessage({ tipo: 'ACTIVAR' });
+        }
+      });
+    });
+  }).catch(() => {});
 }
 
 // ============================================
@@ -506,11 +593,11 @@ async function cargarPanelFamilias() {
     // Cargamos asistencia de las dos semanas visibles (actual + siguiente si es domingo)
     const semanas = semanasFamilia();
     const desde = semanas[0].dias[0];
-    const hasta = semanas[semanas.length - 1].dias[4];
+    const hasta = semanas[semanas.length - 1].dias[6]; // domingo (índice 6 en semana L-D)
 
-    const [filas, bloqueados] = await Promise.all([
+    const [filas, bloqResp] = await Promise.all([
       rpc('comedor_asistencia_familia', { p_pin: estado.pinFamilia, p_desde: desde, p_hasta: hasta }),
-      obtenerSupabaseClient().from('comedor_dias_bloqueados').select('fecha, motivo').gte('fecha', desde).lte('fecha', hasta)
+      obtenerSupabaseClient().from('comedor_dias_bloqueados').select('fecha, motivo')
     ]);
 
     estado.asistenciaSemana = {};
@@ -521,11 +608,24 @@ async function cargarPanelFamilias() {
     });
 
     estado.diasBloqueados = {};
-    ((bloqueados && bloqueados.data) || []).forEach(b => {
+    ((bloqResp && bloqResp.data) || []).forEach(b => {
       estado.diasBloqueados[b.fecha] = b.motivo || '';
     });
 
+    estado.tabFamiliaActiva = 'semana';
     navegar('panel-familias');
+    setTimeout(() => {
+      const cont = document.getElementById('bloques-semana-familia');
+      if (cont) {
+        const hoy = hoyISO();
+        semanasFamilia().forEach(semana => {
+          const bloque = document.createElement('div');
+          bloque.innerHTML = `<div class="etiqueta-semana">${semana.label}</div>`;
+          estado.alumnos.forEach(alumno => bloque.appendChild(crearTarjetaAlumnoSemanal(alumno, semana.dias, hoy)));
+          cont.appendChild(bloque);
+        });
+      }
+    }, 0);
   } catch (e) {
     mostrarToast('No se pudo cargar la información. Comprueba tu conexión.');
     navegar('inicio');
@@ -538,20 +638,40 @@ function semanasFamilia() {
   const hoy = hoyISO();
   const [y, m, d] = hoy.split('-').map(Number);
   const diaSemana = new Date(y, m - 1, d).getDay(); // 0=dom, 1=lun...6=sab
+  const pasaHora = horaActualPasaLimite(estado.config.hora_limite);
 
-  // Lunes de esta semana
+  // Lunes de esta semana (7 días: L-D)
   const diasHastaLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
   const lunesEsta = sumarDias(hoy, diasHastaLunes);
-  // Lun–Dom (7 días)
   const diasEsta = [0, 1, 2, 3, 4, 5, 6].map(i => sumarDias(lunesEsta, i));
 
-  const semanas = [{ label: 'Esta semana', dias: diasEsta }];
+  // Lunes de la semana siguiente (7 días: L-D)
+  const lunesSig = sumarDias(lunesEsta, 7);
+  const diasSig = [0, 1, 2, 3, 4, 5, 6].map(i => sumarDias(lunesSig, i));
 
-  // El domingo (diaSemana === 0) o sábado (6) se abre la semana siguiente
-  if (diaSemana === 0 || diaSemana === 6) {
-    const lunesSig = sumarDias(lunesEsta, 7);
-    const diasSig = [0, 1, 2, 3, 4, 5, 6].map(i => sumarDias(lunesSig, i));
-    semanas.push({ label: 'Semana siguiente', dias: diasSig });
+  // La semana actual desaparece cuando:
+  // - Es viernes (5) y ya pasó la hora límite → semana completamente bloqueada
+  // - Es sábado (6) o domingo (0) → semana ya terminada
+  const semanaActualTerminada =
+    diaSemana === 6 ||  // sábado
+    diaSemana === 0 ||  // domingo
+    (diaSemana === 5 && pasaHora); // viernes después de la hora límite
+
+  const semanas = [];
+
+  if (!semanaActualTerminada) {
+    semanas.push({ label: 'Esta semana', dias: diasEsta });
+  }
+
+  // La semana siguiente siempre es visible desde el viernes a las 10:00,
+  // sábado, domingo, o lunes (para que siempre haya algo que confirmar)
+  const mostrarSiguiente =
+    semanaActualTerminada ||
+    diaSemana === 1 || // lunes, para que puedan ver toda la semana desde el principio
+    (diaSemana === 5 && pasaHora);
+
+  if (mostrarSiguiente || semanas.length === 0) {
+    semanas.push({ label: semanaActualTerminada ? 'Semana del ' + formatearFechaCorta(lunesSig) : 'Semana siguiente', dias: diasSig });
   }
 
   return semanas;
@@ -561,6 +681,7 @@ function renderPanelFamilias() {
   const hoy = hoyISO();
   const pasaHora = horaActualPasaLimite(estado.config.hora_limite);
   const semanas = semanasFamilia();
+  const tabActiva = estado.tabFamiliaActiva || 'semana';
 
   if (estado.alumnos.length === 0) {
     app.innerHTML = `
@@ -588,30 +709,294 @@ function renderPanelFamilias() {
         <h2>${estado.nombreFamilia ? escapeHtml(estado.nombreFamilia) : 'Tu familia'}</h2>
         <button class="btn-cerrar-sesion" onclick="salirDePerfil('familia')">Cerrar sesión</button>
       </div>
-      <div class="contenido">
-        <button class="accion-rapida" style="margin-bottom:1rem;border-color:var(--azul);color:var(--azul)" onclick="abrirMenuMensual()">📋 Ver menú del mes</button>
-        ${pasaHora ? `
-          <div class="aviso-hora-limite">
-            ⏰ Ya ha pasado la hora límite (${estado.config.hora_limite}). Si necesitas cambiar algo para hoy, avisa directamente al centro.
-          </div>
-        ` : ''}
-        <div id="bloques-semana-familia"></div>
+      <div class="tabs-familia">
+        <button class="tab-familia ${tabActiva === 'semana' ? 'activa' : ''}" onclick="cambiarTabFamilia('semana')">📅 Esta semana</button>
+        <button class="tab-familia ${tabActiva === 'historial' ? 'activa' : ''}" onclick="cambiarTabFamilia('historial')">📋 Historial</button>
+      </div>
+      <div class="contenido" id="contenido-familia">
+        ${tabActiva === 'semana' ? renderContenidoSemanaFamilia(hoy, pasaHora, semanas) : '<div class="cargando"><div class="spinner"></div>Cargando historial…</div>'}
       </div>
     </div>
   `;
 
-  const cont = document.getElementById('bloques-semana-familia');
-  semanas.forEach(semana => {
-    const bloque = document.createElement('div');
-    bloque.innerHTML = `<div class="etiqueta-semana">${semana.label}</div>`;
-
-    estado.alumnos.forEach(alumno => {
-      bloque.appendChild(crearTarjetaAlumnoSemanal(alumno, semana.dias, hoy));
-    });
-
-    cont.appendChild(bloque);
-  });
+  if (tabActiva === 'historial') cargarHistorialFamilia();
 }
+
+function renderContenidoSemanaFamilia(hoy, pasaHora, semanas) {
+  return `
+    <button class="accion-rapida" style="margin-bottom:1rem;border-color:var(--azul);color:var(--azul)" onclick="abrirMenuMensual()">📋 Ver menú del mes</button>
+    ${pasaHora ? `
+      <div class="aviso-hora-limite">
+        ⏰ Ya ha pasado la hora límite (${estado.config.hora_limite}). Si necesitas cambiar algo para hoy, avisa directamente al centro.
+      </div>
+    ` : ''}
+    <div id="bloques-semana-familia"></div>
+  `;
+}
+
+function cambiarTabFamilia(tab) {
+  estado.tabFamiliaActiva = tab;
+  renderPanelFamilias();
+  if (tab === 'semana') {
+    // Re-renderizar los bloques de semana
+    const cont = document.getElementById('bloques-semana-familia');
+    if (cont) {
+      const hoy = hoyISO();
+      const semanas = semanasFamilia();
+      semanas.forEach(semana => {
+        const bloque = document.createElement('div');
+        bloque.innerHTML = `<div class="etiqueta-semana">${semana.label}</div>`;
+        estado.alumnos.forEach(alumno => {
+          bloque.appendChild(crearTarjetaAlumnoSemanal(alumno, semana.dias, hoy));
+        });
+        cont.appendChild(bloque);
+      });
+    }
+  }
+}
+
+async function cargarHistorialFamilia() {
+  try {
+    const [registros, bloqResp] = await Promise.all([
+      rpc('comedor_historial_familia', { p_pin: estado.pinFamilia }),
+      obtenerSupabaseClient().from('comedor_dias_bloqueados').select('fecha, motivo')
+    ]);
+    estado.historialFamilia = registros || [];
+    estado.diasBloqueados = {};
+    ((bloqResp && bloqResp.data) || []).forEach(b => {
+      estado.diasBloqueados[b.fecha] = b.motivo || '';
+    });
+    renderHistorialFamilia();
+  } catch (e) {
+    document.getElementById('contenido-familia').innerHTML =
+      '<div class="vacio-estado"><p>No se pudo cargar el historial.</p></div>';
+  }
+}
+
+function renderHistorialFamilia() {
+  const cont = document.getElementById('contenido-familia');
+  if (!cont) return;
+
+  const registros = estado.historialFamilia || [];
+
+  // Agrupar por alumno
+  const porAlumno = {};
+  estado.alumnos.forEach(a => { porAlumno[a.id] = { alumno: a, registros: {} }; });
+  registros.forEach(r => {
+    if (r.fecha && porAlumno[r.alumno_id]) {
+      porAlumno[r.alumno_id].registros[r.fecha] = r.va;
+    }
+  });
+
+  if (!estado.mesHistorial) estado.mesHistorial = hoyISO().slice(0, 7);
+  const [anyo, mes] = estado.mesHistorial.split('-').map(Number);
+  const ultimoDia = new Date(anyo, mes, 0).getDate();
+  const nombreMes = new Date(anyo, mes - 1, 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+
+  const diasMes = [];
+  for (let d = 1; d <= ultimoDia; d++) {
+    const fecha = `${estado.mesHistorial}-${String(d).padStart(2, '0')}`;
+    const diaSemana = new Date(anyo, mes - 1, d).getDay();
+    diasMes.push({ fecha, diaSemana, laborable: diaSemana !== 0 && diaSemana !== 6 });
+  }
+
+  const alumnos = Object.values(porAlumno);
+
+  const hoyParaContador = hoyISO();
+  const alumnosHtml = alumnos.map(({ alumno, registros: reg }) => {
+    // Un día sin marcar = asistió (la familia solo avisa cuando NO va)
+    // Solo contar desde el inicio del comedor
+    const diasAsistidos = diasMes.filter(d => d.laborable && d.fecha >= FECHA_INICIO_COMEDOR && d.fecha <= hoyParaContador && reg[d.fecha] !== false).length;
+    const diasNoAsistidos = diasMes.filter(d => d.laborable && d.fecha >= FECHA_INICIO_COMEDOR && reg[d.fecha] === false).length;
+    const calHtml = renderCalendarioMesEditable(anyo, mes, diasMes, reg, alumno.id);
+
+    return `
+      <div class="tarjeta-alumno" style="margin-bottom:1.25rem">
+        <div class="tarjeta-alumno-cabecera">
+          <div class="avatar-alumno">${iniciales(alumno.nombre, alumno.apellidos)}</div>
+          <div>
+            <div class="tarjeta-alumno-nombre">${escapeHtml(alumno.nombre)} ${escapeHtml(alumno.apellidos)}</div>
+            <div class="tarjeta-alumno-clase">${escapeHtml(alumno.clase_nombre)}</div>
+          </div>
+        </div>
+        ${calHtml}
+        <p style="font-size:11px;color:var(--marron-suave);text-align:center;margin:4px 0 10px">
+          Toca cualquier día para cambiar su registro
+        </p>
+        <div class="resumen-mes-familia" style="grid-template-columns:1fr 1fr">
+          <div class="resumen-mes-stat verde">
+            <div class="resumen-mes-num">${diasAsistidos}</div>
+            <div class="resumen-mes-label">Días asistidos</div>
+          </div>
+          <div class="resumen-mes-stat rojo">
+            <div class="resumen-mes-num">${diasNoAsistidos}</div>
+            <div class="resumen-mes-label">No asistidos</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  cont.innerHTML = `
+    <div class="nav-mes-historial">
+      <button class="btn-icono-pequeno" onclick="cambiarMesHistorial(-1)">‹</button>
+      <span class="nombre-mes-historial">${nombreMes}</span>
+      <button class="btn-icono-pequeno" onclick="cambiarMesHistorial(1)">›</button>
+    </div>
+    <p style="font-size:12px;color:var(--marron-suave);text-align:center;margin:0 0 12px;font-weight:600">
+      Desde el historial puedes modificar cualquier día, incluyendo fechas pasadas y futuras.
+    </p>
+    ${alumnosHtml}
+  `;
+}
+
+function renderCalendarioMesEditable(anyo, mes, diasMes, registros, alumnoId) {
+  const primerDia = new Date(anyo, mes - 1, 1).getDay();
+  const offsetLunes = primerDia === 0 ? 6 : primerDia - 1;
+  const hoy = hoyISO();
+
+  const diasSemana = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+  const cabeceraHtml = diasSemana.map(d => `<div class="cal-cabecera">${d}</div>`).join('');
+  const celdasVacias = Array(offsetLunes).fill('<div class="cal-dia vacio"></div>').join('');
+
+  const celdasDias = diasMes.map(({ fecha, diaSemana, laborable }) => {
+    const d = parseInt(fecha.split('-')[2]);
+    const va = registros[fecha];
+    const esHoy = fecha === hoy;
+
+    if (!laborable) return `<div class="cal-dia finde">${d}</div>`;
+
+    // Día bloqueado (festivo/puente)
+    if (estado.diasBloqueados[fecha] !== undefined) {
+      const motivo = estado.diasBloqueados[fecha] || 'No lectivo';
+      return `<div class="cal-dia cal-bloqueado" title="${escapeHtml(motivo)}">🔒</div>`;
+    }
+
+    // Días anteriores al inicio del comedor: sin marcar, no editables
+    if (fecha < FECHA_INICIO_COMEDOR) return `<div class="cal-dia sin-comedor">${d}</div>`;
+
+    const esPasado = fecha < hoy;
+    let clase = 'cal-dia';
+    if (va === true) clase += ' asistio';
+    else if (va === false) clase += ' no-asistio';
+    else if (esPasado) clase += ' sin-datos';
+    else clase += ' sin-marcar';
+    if (esHoy) clase += ' hoy';
+
+    // Solo hoy y días futuros son editables desde el historial
+    if (!esPasado) {
+      clase += ' editable';
+      return `<div class="${clase}" onclick="editarDiaHistorialFamilia('${alumnoId}','${fecha}',${va === undefined ? null : va})">${d}</div>`;
+    }
+    return `<div class="${clase}">${d}</div>`;
+  }).join('');
+
+  return `
+    <div class="calendario-mes">
+      ${cabeceraHtml}
+      ${celdasVacias}
+      ${celdasDias}
+    </div>
+    <div class="leyenda-cal">
+      <span class="leyenda-item asistio">✓ Asistió / Sin marcar</span>
+      <span class="leyenda-item no-asistio">✗ No asistió</span>
+      <span class="leyenda-item sin-marcar">◌ Futuro sin confirmar</span>
+    </div>
+  `;
+}
+
+function renderCalendarioMes(anyo, mes, diasMes, registros) {
+  // Versión solo lectura (usada en historial de admin)
+  const primerDia = new Date(anyo, mes - 1, 1).getDay();
+  const offsetLunes = primerDia === 0 ? 6 : primerDia - 1;
+  const diasSemana = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+  const cabeceraHtml = diasSemana.map(d => `<div class="cal-cabecera">${d}</div>`).join('');
+  const celdasVacias = Array(offsetLunes).fill('<div class="cal-dia vacio"></div>').join('');
+  const hoyAdmin = hoyISO();
+  const celdasDias = diasMes.map(({ fecha, diaSemana, laborable }) => {
+    const d = parseInt(fecha.split('-')[2]);
+    const va = registros[fecha];
+    const esHoy = fecha === hoyAdmin;
+    const esPasado = fecha < hoyAdmin;
+    let clase = 'cal-dia';
+    if (!laborable) clase += ' finde';
+    else if (fecha < FECHA_INICIO_COMEDOR) clase += ' sin-comedor';
+    else if (va === true) clase += ' asistio';
+    else if (va === false) clase += ' no-asistio';
+    else if (esPasado) clase += ' sin-datos'; // sin marcar pasado = sin datos
+    else clase += ' sin-marcar';
+    if (esHoy) clase += ' hoy';
+    return `<div class="${clase}">${d}</div>`;
+  }).join('');
+  return `
+    <div class="calendario-mes">${cabeceraHtml}${celdasVacias}${celdasDias}</div>
+    <div class="leyenda-cal">
+      <span class="leyenda-item asistio">✓ Asistió / Sin marcar</span>
+      <span class="leyenda-item no-asistio">✗ No asistió</span>
+      <span class="leyenda-item sin-marcar">◌ Futuro sin confirmar</span>
+    </div>
+  `;
+}
+
+function editarDiaHistorialFamilia(alumnoId, fecha, vaActual) {
+  // Mini popup para elegir ✓ / ✗ / – sin modal completo
+  const previo = document.getElementById('popup-dia-historial');
+  if (previo) previo.remove();
+
+  const fechaLabel = new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+  const popup = document.createElement('div');
+  popup.id = 'popup-dia-historial';
+  popup.style.cssText = `
+    position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;
+    display:flex;align-items:center;justify-content:center;padding:1.5rem
+  `;
+  popup.innerHTML = `
+    <div style="background:var(--crema);border-radius:var(--radio);padding:1.5rem;width:100%;max-width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.25)">
+      <p style="margin:0 0 4px;font-size:12px;color:var(--marron-suave);font-weight:600;text-transform:capitalize">${fechaLabel}</p>
+      <p style="margin:0 0 1rem;font-size:14px;color:var(--marron);font-weight:700">¿Qué registro quieres guardar?</p>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="dia-toggle si ${vaActual === true ? 'activa' : ''}" style="flex:1;padding:12px;font-size:16px" onclick="guardarHistorialFamilia('${alumnoId}', '${fecha}', true)">✓ Va</button>
+        <button class="dia-toggle no ${vaActual === false ? 'activa' : ''}" style="flex:1;padding:12px;font-size:16px" onclick="guardarHistorialFamilia('${alumnoId}', '${fecha}', false)">✗ No va</button>
+      </div>
+      <button class="btn-secundario" style="width:100%;font-size:13px" onclick="document.getElementById('popup-dia-historial').remove()">Cancelar</button>
+    </div>
+  `;
+  document.body.appendChild(popup);
+  popup.addEventListener('click', e => { if (e.target === popup) popup.remove(); });
+}
+
+async function guardarHistorialFamilia(alumnoId, fecha, va) {
+  document.getElementById('popup-dia-historial')?.remove();
+  try {
+    await rpc('comedor_familia_editar_historial', {
+      p_pin: estado.pinFamilia,
+      p_alumno_id: alumnoId,
+      p_fecha: fecha,
+      p_va: va
+    });
+    // Actualizar estado local
+    const alumno = estado.historialFamilia?.find(r => r.alumno_id === alumnoId && r.fecha === fecha);
+    if (alumno) {
+      alumno.va = va;
+    } else {
+      if (!estado.historialFamilia) estado.historialFamilia = [];
+      const al = estado.alumnos.find(a => a.id === alumnoId);
+      estado.historialFamilia.push({ alumno_id: alumnoId, nombre: al?.nombre, apellidos: al?.apellidos, clase_nombre: al?.clase_nombre, fecha, va });
+    }
+    mostrarToast('Registro guardado ✓', 1800);
+    renderHistorialFamilia();
+  } catch (e) {
+    mostrarToast('No se pudo guardar. Inténtalo de nuevo.');
+  }
+}
+
+function cambiarMesHistorial(delta) {
+  const [anyo, mes] = estado.mesHistorial.split('-').map(Number);
+  const fecha = new Date(anyo, mes - 1 + delta, 1);
+  estado.mesHistorial = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+  renderHistorialFamilia();
+}
+
 
 function crearTarjetaAlumnoSemanal(alumno, dias, hoy) {
   const div = document.createElement('div');
@@ -627,25 +1012,24 @@ function crearTarjetaAlumnoSemanal(alumno, dias, hoy) {
     const motivoBloqueo = estado.diasBloqueados[fecha] || '';
     const [, , d] = fecha.split('-');
     const fechaObj = new Date(fecha + 'T12:00:00');
-    const diaSem = fechaObj.getDay(); // 0=dom, 6=sab
+    const diaSem = fechaObj.getDay();
     const esFinDeSemana = diaSem === 0 || diaSem === 6;
     const nombreDia = fechaObj.toLocaleDateString('es-ES', { weekday: 'short' });
     const etiqueta = nombreDia.charAt(0).toUpperCase() + nombreDia.slice(1, 3);
 
-    // Fin de semana: mostrar en gris rojizo, sin interacción
     if (esFinDeSemana) {
       return `
-        <div class="dia-fin-semana" title="${etiqueta}">
+        <div class="dia-semana-col dia-fin-semana">
           <div class="dia-semana-nombre">${etiqueta}</div>
           <div class="dia-semana-fecha">${parseInt(d)}</div>
-          <div class="dia-fin-semana-icono">—</div>
+          <div class="dia-bloqueado-icono" style="font-size:14px;margin:2px 0">—</div>
         </div>
       `;
     }
 
     if (esBloqueado) {
       return `
-        <div class="dia-bloqueado" title="${escapeHtml(motivoBloqueo)}">
+        <div class="dia-semana-col dia-bloqueado" title="${escapeHtml(motivoBloqueo)}">
           <div class="dia-semana-nombre">${etiqueta}</div>
           <div class="dia-semana-fecha">${parseInt(d)}</div>
           <div class="dia-bloqueado-icono">🔒</div>
@@ -826,7 +1210,7 @@ function renderPanelProfesorado() {
         <button class="btn-cerrar-sesion" onclick="salirDePerfil('profesorado')">Cerrar sesión</button>
       </div>
       <div class="contenido">
-        <button class="accion-rapida" style="margin-bottom:1.25rem;border-color:var(--azul);color:var(--azul)" onclick="abrirMenuMensual()">📋 Ver menú del mes</button>
+        <button class="accion-rapida" style="margin-bottom:1rem;border-color:var(--azul);color:var(--azul)" onclick="abrirMenuMensual()">📋 Ver menú del mes</button>
         <div class="selector-fecha-staff">
           <button class="btn-icono-pequeno" onclick="cambiarDiaProfesorado(-1)">‹</button>
           <input type="date" id="input-fecha-profesorado" value="${f}" onchange="cambiarFechaProfesorado(this.value)">
@@ -842,6 +1226,10 @@ function renderPanelProfesorado() {
             <div class="stat-numero">${sinMarcar}</div>
             <div class="stat-label">Sin marcar</div>
           </div>
+          <div class="stat-card">
+            <div class="stat-numero rojo">${totalNo}</div>
+            <div class="stat-label">No vienen</div>
+          </div>
         </div>
 
         ${lista.length === 0 ? `
@@ -850,12 +1238,24 @@ function renderPanelProfesorado() {
             <p>No hay alumnos registrados todavía en esta clase.</p>
           </div>
         ` : `
+          <p style="font-size:12.5px;color:var(--marron-suave);font-weight:600;margin:0 0 10px">
+            Puedes confirmar o corregir la asistencia de cada alumno/a sin restricción de hora.
+          </p>
           <div class="lista-staff">
             ${lista.map(a => `
-              <div class="fila-staff">
+              <div class="fila-staff" style="flex-wrap:wrap;gap:8px;padding:12px 0">
                 <span class="punto-estado ${a.va === true ? 'si' : a.va === false ? 'no' : 'sin-marcar'}"></span>
-                <span>${escapeHtml(a.nombre)} ${escapeHtml(a.apellidos)}</span>
-                ${a.observaciones ? `<span class="etiqueta-obs">⚠️ alerta</span>` : ''}
+                <span style="flex:1;min-width:0">${escapeHtml(a.nombre)} ${escapeHtml(a.apellidos)}
+                  ${a.observaciones ? `<span class="etiqueta-obs" style="margin-left:6px">⚠️</span>` : ''}
+                </span>
+                <div style="display:flex;gap:6px;flex-shrink:0">
+                  <button class="dia-toggle si ${a.va === true ? 'activa' : ''}"
+                    style="width:48px;padding:8px"
+                    onclick="marcarAsistenciaDocente('${a.alumno_id}', true, this)">✓</button>
+                  <button class="dia-toggle no ${a.va === false ? 'activa' : ''}"
+                    style="width:48px;padding:8px"
+                    onclick="marcarAsistenciaDocente('${a.alumno_id}', false, this)">✗</button>
+                </div>
               </div>
             `).join('')}
           </div>
@@ -863,6 +1263,40 @@ function renderPanelProfesorado() {
       </div>
     </div>
   `;
+}
+
+async function marcarAsistenciaDocente(alumnoId, va, btnEl) {
+  const fila = btnEl.closest('.fila-staff');
+  if (fila) {
+    fila.querySelectorAll('.dia-toggle').forEach(b => b.classList.remove('activa'));
+    btnEl.classList.add('activa');
+    const punto = fila.querySelector('.punto-estado');
+    if (punto) {
+      punto.className = `punto-estado ${va ? 'si' : 'no'}`;
+    }
+  }
+  try {
+    await rpc('comedor_profesorado_marcar_asistencia', {
+      p_clave: estado.claveProfesorado,
+      p_alumno_id: alumnoId,
+      p_fecha: estado.fechaProfesoradoSeleccionada,
+      p_va: va
+    });
+    // Actualizar el estado local
+    const alumno = estado.listadoProfesorado.find(a => a.alumno_id === alumnoId);
+    if (alumno) alumno.va = va;
+    // Actualizar contadores sin re-renderizar todo
+    const totalSi = estado.listadoProfesorado.filter(a => a.va === true).length;
+    const totalNo = estado.listadoProfesorado.filter(a => a.va === false).length;
+    const sinMarcar = estado.listadoProfesorado.filter(a => a.va === null || a.va === undefined).length;
+    const nums = document.querySelectorAll('.stat-numero');
+    if (nums[0]) nums[0].textContent = totalSi;
+    if (nums[1]) nums[1].textContent = sinMarcar;
+    if (nums[2]) nums[2].textContent = totalNo;
+  } catch (e) {
+    mostrarToast('No se pudo guardar. Inténtalo de nuevo.');
+    if (fila) fila.querySelectorAll('.dia-toggle').forEach(b => b.classList.remove('activa'));
+  }
 }
 
 function cambiarDiaProfesorado(delta) {
@@ -948,21 +1382,37 @@ function renderPanelStaff() {
   const f = estado.fechaStaffSeleccionada;
   const lista = estado.listadoStaff;
 
+  const totalAlumnos = lista.length;
   const totalSi = lista.filter(a => a.va === true).length;
   const totalNo = lista.filter(a => a.va === false).length;
   const sinMarcar = lista.filter(a => a.va === null || a.va === undefined).length;
 
-  const porClase = {};
+  // Los sin marcar se consideran que SÍ vienen (se cuentan con los que asisten)
+  const totalVienen = totalSi + sinMarcar;
+
+  // Solo mostramos los que han confirmado explícitamente que NO vienen
+  const ausentes = lista.filter(a => a.va === false);
+
+  const ausentesPorClase = {};
+  const totalPorClase = {};
   lista.forEach(a => {
-    if (!porClase[a.clase_nombre]) porClase[a.clase_nombre] = [];
-    porClase[a.clase_nombre].push(a);
+    if (!totalPorClase[a.clase_nombre]) totalPorClase[a.clase_nombre] = 0;
+    totalPorClase[a.clase_nombre]++;
   });
+  ausentes.forEach(a => {
+    if (!ausentesPorClase[a.clase_nombre]) ausentesPorClase[a.clase_nombre] = [];
+    ausentesPorClase[a.clase_nombre].push(a);
+  });
+
+  // Orden de clases respetando el orden que viene de la BD (c.orden)
+  const clasesOrdenadas = [...new Set(lista.map(a => a.clase_nombre))]; // ya viene ordenado de la BD
+  const clasesConAusentes = clasesOrdenadas.filter(c => ausentesPorClase[c]);
 
   app.innerHTML = `
     <div class="pantalla">
       <div class="cabecera-simple">
         <button class="btn-volver" onclick="salirDePerfil('staff')">‹</button>
-        <h2>Listado del comedor</h2>
+        <h2>Comedor</h2>
         <button class="btn-cerrar-sesion" onclick="salirDePerfil('staff')">Cerrar sesión</button>
       </div>
       <div class="contenido">
@@ -974,12 +1424,16 @@ function renderPanelStaff() {
 
         <div class="resumen-staff">
           <div class="stat-card">
-            <div class="stat-numero verde">${totalSi}</div>
+            <div class="stat-numero verde">${totalVienen}</div>
             <div class="stat-label">Comen hoy</div>
           </div>
           <div class="stat-card">
-            <div class="stat-numero">${sinMarcar}</div>
-            <div class="stat-label">Sin marcar</div>
+            <div class="stat-numero rojo">${totalNo}</div>
+            <div class="stat-label">No vienen</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-numero">${totalAlumnos}</div>
+            <div class="stat-label">Total</div>
           </div>
         </div>
 
@@ -988,23 +1442,34 @@ function renderPanelStaff() {
             <span class="emoji-grande">📭</span>
             <p>No hay alumnos registrados todavía.</p>
           </div>
-        ` : Object.keys(porClase).sort().map(clase => `
-          <div class="grupo-clase">
-            <div class="grupo-clase-titulo">
-              <span>${escapeHtml(clase)}</span>
-              <span>${porClase[clase].filter(a => a.va === true).length} comen</span>
-            </div>
-            <div class="lista-staff">
-              ${porClase[clase].map(a => `
-                <div class="fila-staff">
-                  <span class="punto-estado ${a.va === true ? 'si' : a.va === false ? 'no' : 'sin-marcar'}"></span>
-                  <span>${escapeHtml(a.nombre)} ${escapeHtml(a.apellidos)}</span>
-                  ${a.observaciones ? `<span class="etiqueta-obs">⚠️ alerta</span>` : ''}
-                </div>
-              `).join('')}
-            </div>
+        ` : ausentes.length === 0 ? `
+          <div class="vacio-estado">
+            <span class="emoji-grande">✅</span>
+            <p>Ningún alumno ha confirmado ausencia hoy.</p>
           </div>
-        `).join('')}
+        ` : `
+          <div class="form-grupo" style="margin-bottom:10px">
+            <label>Alumnado que NO viene hoy</label>
+          </div>
+          ${clasesConAusentes.map(clase => `
+            <div class="grupo-clase">
+              <div class="grupo-clase-titulo">
+                <span>${escapeHtml(clase)}</span>
+                <span style="color:var(--rojo);font-weight:700">${ausentesPorClase[clase].length} ausente${ausentesPorClase[clase].length > 1 ? 's' : ''} confirmado${ausentesPorClase[clase].length > 1 ? 's' : ''}</span>
+              </div>
+              <div class="lista-staff">
+                ${ausentesPorClase[clase].map(a => `
+                  <div class="fila-staff">
+                    <span class="punto-estado no"></span>
+                    <span>${escapeHtml(a.nombre)} ${escapeHtml(a.apellidos)}</span>
+                    <span style="font-size:11px;color:var(--rojo);font-weight:600">No va</span>
+                    ${a.observaciones ? `<span class="etiqueta-obs">⚠️</span>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          `).join('')}
+        `}
       </div>
     </div>
   `;
@@ -1141,7 +1606,6 @@ function renderTabAdminActiva() {
 function renderTabAlumnos() {
   const cont = document.getElementById('contenido-tab-admin');
   const clasesOpciones = estado.clasesAdmin.map(c => `<option value="${c.id}">${escapeHtml(c.nombre)}</option>`).join('');
-  const familiasOpciones = estado.familiasAdmin.map(f => `<option value="${f.id}">${escapeHtml(f.nombre_apellidos)} (${f.pin})</option>`).join('');
 
   cont.innerHTML = `
     <div class="tarjeta-admin">
@@ -1149,7 +1613,16 @@ function renderTabAlumnos() {
       <div class="form-grupo"><label>Apellidos</label><input id="nuevo-alumno-apellidos" placeholder="Ej. García Pérez"></div>
       <div class="grid-2">
         <div class="form-grupo"><label>Clase</label><select id="nuevo-alumno-clase">${clasesOpciones || '<option value="">Crea una clase primero</option>'}</select></div>
-        <div class="form-grupo"><label>Familia</label><select id="nuevo-alumno-familia">${familiasOpciones || '<option value="">Crea una familia primero</option>'}</select></div>
+      </div>
+      <div class="form-grupo">
+        <label>Familia</label>
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <input id="buscador-familia" placeholder="Buscar por PIN o nombre de alumno ya registrado..." style="flex:1;padding:10px 14px;border:2px solid var(--crema-oscuro);border-radius:var(--radio-sm);font-size:14px;background:var(--crema);color:var(--marron)" oninput="buscarFamiliaExistente(this.value)">
+        </div>
+        <div id="resultado-busqueda-familia" style="margin-bottom:8px"></div>
+        <input type="hidden" id="nuevo-alumno-familia" value="">
+        <button class="btn-mini azul" onclick="crearFamiliaYAsignar()">+ Crear familia nueva (genera PIN automático)</button>
+        <div id="nueva-familia-info" style="margin-top:6px"></div>
       </div>
       <div class="form-grupo"><label>Observaciones (alergias, notas para cocina)</label><textarea id="nuevo-alumno-obs" rows="2" placeholder="Opcional"></textarea></div>
       <button class="btn-principal azul" onclick="crearAlumno()">+ Añadir alumno/a</button>
@@ -1232,7 +1705,12 @@ function renderFilasAlumnosAdmin(lista) {
           </select>
         ` : ''}
       </div>
-      ${!estado.modoSeleccion ? `<button class="btn-mini rojo" style="margin-left:6px;flex-shrink:0" onclick="eliminarAlumno('${a.id}', '${escapeHtml(a.nombre)}')">Eliminar</button>` : ''}
+      ${!estado.modoSeleccion ? `
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;margin-left:6px">
+          <button class="btn-mini azul" onclick="verHistorialAlumnoAdmin('${a.id}', '${escapeHtml(a.nombre)} ${escapeHtml(a.apellidos)}')">Historial</button>
+          <button class="btn-mini rojo" onclick="eliminarAlumno('${a.id}', '${escapeHtml(a.nombre)}')">Eliminar</button>
+        </div>
+      ` : ''}
     </div>
   `;
   }).join('');
@@ -1254,6 +1732,91 @@ function marcarTodosVisibles(marcar) {
   });
 }
 
+function buscarFamiliaExistente(texto) {
+  const cont = document.getElementById('resultado-busqueda-familia');
+  const inputFamilia = document.getElementById('nuevo-alumno-familia');
+  const t = texto.trim().toUpperCase();
+
+  if (!t || t.length < 2) {
+    cont.innerHTML = '';
+    return;
+  }
+
+  // Buscar por PIN exacto o por nombre de alumno ya registrado
+  const porPin = estado.familiasAdmin.filter(f => f.pin.toUpperCase().includes(t));
+  const porNombre = estado.alumnosAdmin.filter(a =>
+    (a.nombre + ' ' + a.apellidos).toUpperCase().includes(t) ||
+    (a.apellidos + ' ' + a.nombre).toUpperCase().includes(t)
+  );
+
+  // Unir familias encontradas por nombre de alumno
+  const familiasPorNombre = porNombre.map(a =>
+    estado.familiasAdmin.find(f => f.id === a.familia_id)
+  ).filter(Boolean);
+
+  const todasFamilias = [...new Map(
+    [...porPin, ...familiasPorNombre].map(f => [f.id, f])
+  ).values()].slice(0, 5);
+
+  if (todasFamilias.length === 0) {
+    cont.innerHTML = `<p style="font-size:12.5px;color:var(--marron-suave);margin:4px 0">No se encontró ninguna familia. Puedes crear una nueva abajo.</p>`;
+    inputFamilia.value = '';
+    return;
+  }
+
+  cont.innerHTML = todasFamilias.map(f => {
+    const alumnosDeFamilia = estado.alumnosAdmin.filter(a => a.familia_id === f.id);
+    const nombresAlumnos = alumnosDeFamilia.map(a => `${a.nombre} ${a.apellidos}`).join(', ');
+    return `
+      <div class="fila-lista-admin" style="cursor:pointer;margin-bottom:4px" onclick="seleccionarFamilia('${f.id}', '${escapeHtml(f.pin)}', '${escapeHtml(f.nombre_apellidos)}')">
+        <div class="fila-lista-admin-info">
+          <div class="fila-lista-admin-nombre" style="color:var(--naranja);font-weight:700">PIN: ${escapeHtml(f.pin)}</div>
+          <div class="fila-lista-admin-detalle">${escapeHtml(nombresAlumnos) || escapeHtml(f.nombre_apellidos)}</div>
+        </div>
+        <span class="btn-mini azul">Seleccionar</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function seleccionarFamilia(id, pin, nombre) {
+  document.getElementById('nuevo-alumno-familia').value = id;
+  document.getElementById('buscador-familia').value = pin;
+  document.getElementById('resultado-busqueda-familia').innerHTML = `
+    <div style="background:var(--verde-claro);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--verde-oscuro);font-weight:600">
+      ✓ Familia seleccionada · PIN: ${escapeHtml(pin)}
+    </div>
+  `;
+  document.getElementById('nueva-familia-info').innerHTML = '';
+}
+
+async function crearFamiliaYAsignar() {
+  const apellidos = document.getElementById('nuevo-alumno-apellidos').value.trim();
+  const nombreFamilia = apellidos ? `Familia ${apellidos}` : 'Familia nueva';
+  try {
+    const resultado = await rpc('comedor_admin_crear_familia', {
+      p_pin: estado.pinAdmin,
+      p_nombre: nombreFamilia,
+      p_telefono: null
+    });
+    const fila = resultado && resultado[0];
+    if (!fila) throw new Error('Sin respuesta');
+
+    // Guardar el id y pin en el campo hidden
+    document.getElementById('nuevo-alumno-familia').value = fila.id;
+    document.getElementById('buscador-familia').value = fila.pin_generado;
+    document.getElementById('resultado-busqueda-familia').innerHTML = '';
+    document.getElementById('nueva-familia-info').innerHTML = `
+      <div style="background:var(--verde-claro);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--verde-oscuro);font-weight:600">
+        ✓ Familia creada · PIN: <strong>${escapeHtml(fila.pin_generado)}</strong> — Ya puedes pulsar "Añadir alumno/a"
+      </div>
+    `;
+    await cargarFamiliasAdmin();
+  } catch (e) {
+    mostrarToast('No se pudo crear la familia: ' + (e.message || ''));
+  }
+}
+
 async function crearAlumno() {
   const nombre = document.getElementById('nuevo-alumno-nombre').value.trim();
   const apellidos = document.getElementById('nuevo-alumno-apellidos').value.trim();
@@ -1262,7 +1825,10 @@ async function crearAlumno() {
   const obs = document.getElementById('nuevo-alumno-obs').value.trim();
 
   if (!nombre || !apellidos || !claseId || !familiaId) {
-    mostrarToast('Rellena nombre, apellidos, clase y familia.');
+    if (!nombre) mostrarToast('Falta el nombre del alumno/a.');
+    else if (!apellidos) mostrarToast('Faltan los apellidos.');
+    else if (!claseId) mostrarToast('Selecciona una clase.');
+    else mostrarToast('Busca o crea una familia primero.');
     return;
   }
 
@@ -1300,6 +1866,195 @@ async function cambiarClaseAlumno(alumnoId, claseId, selectEl) {
   } catch (e) {
     mostrarToast('No se pudo cambiar la clase.');
   }
+}
+
+async function verHistorialAlumnoAdmin(alumnoId, nombreCompleto) {
+  app.innerHTML = `<div class="cargando"><div class="spinner"></div>Cargando historial de ${escapeHtml(nombreCompleto)}…</div>`;
+
+  try {
+    const registros = await rpc('comedor_admin_historial_alumno', {
+      p_pin: estado.pinAdmin, p_alumno_id: alumnoId
+    });
+
+    const mapaRegistros = {};
+    (registros || []).forEach(r => { mapaRegistros[r.fecha] = r.va; });
+
+    const precio = parseFloat(estado.config.precio_dia || '5');
+    if (!estado.mesHistorialAdmin) estado.mesHistorialAdmin = hoyISO().slice(0, 7);
+    if (!estado.modoEdicionHistorial) estado.modoEdicionHistorial = false;
+    const cambiosPendientes = {}; // fecha → boolean
+
+    const renderAdmin = () => {
+      const [anyo, mes] = estado.mesHistorialAdmin.split('-').map(Number);
+      const ultimoDia = new Date(anyo, mes, 0).getDate();
+      const nombreMes = new Date(anyo, mes - 1, 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+      const diasMes = [];
+      for (let d = 1; d <= ultimoDia; d++) {
+        const fecha = `${estado.mesHistorialAdmin}-${String(d).padStart(2, '0')}`;
+        const diaSemana = new Date(anyo, mes - 1, d).getDay();
+        diasMes.push({ fecha, diaSemana, laborable: diaSemana !== 0 && diaSemana !== 6 });
+      }
+
+      // Combinar registros originales con cambios pendientes
+      const registrosConCambios = { ...mapaRegistros, ...cambiosPendientes };
+      const hoyAdmin2 = hoyISO();
+      // Sin marcar en días pasados = asistió; excluir días antes del inicio del comedor
+      const diasAsistidos = diasMes.filter(d => d.laborable && d.fecha >= FECHA_INICIO_COMEDOR && d.fecha <= hoyAdmin2 && registrosConCambios[d.fecha] !== false).length;
+      const diasNo = diasMes.filter(d => d.laborable && d.fecha >= FECHA_INICIO_COMEDOR && registrosConCambios[d.fecha] === false).length;
+      const edicion = estado.modoEdicionHistorial;
+
+      const filasEdicion = diasMes.filter(d => d.laborable).map(d => {
+        const va = registrosConCambios[d.fecha];
+        const fechaLabel = new Date(d.fecha + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+        const tieneCambio = d.fecha in cambiosPendientes;
+
+        if (edicion) {
+          return `
+            <div class="fila-staff" style="${tieneCambio ? 'background:var(--amarillo-claro,#fffbe6);border-radius:8px' : ''}">
+              <span style="flex:1;font-size:13px">${fechaLabel}</span>
+              <div style="display:flex;gap:6px">
+                <button class="dia-toggle si ${va === true ? 'activa' : ''}" style="width:44px;padding:6px"
+                  onclick="registrarCambioAsistencia('${d.fecha}', true, this)">✓</button>
+                <button class="dia-toggle no ${va === false ? 'activa' : ''}" style="width:44px;padding:6px"
+                  onclick="registrarCambioAsistencia('${d.fecha}', false, this)">✗</button>
+                ${va !== undefined && va !== null ? `<button class="btn-mini" style="font-size:11px;padding:4px 8px"
+                  onclick="registrarCambioAsistencia('${d.fecha}', null, this)">–</button>` : ''}
+              </div>
+            </div>
+          `;
+        } else {
+          // Días anteriores al inicio del comedor: no mostrar
+          if (d.fecha < FECHA_INICIO_COMEDOR) return '';
+          const esPasadoAdmin = d.fecha < hoyISO();
+          const asistioEfectivo = va === true || (va !== false && esPasadoAdmin);
+          return `
+            <div class="fila-staff">
+              <span class="punto-estado ${asistioEfectivo ? 'si' : va === false ? 'no' : 'sin-marcar'}"></span>
+              <span style="flex:1">${fechaLabel}</span>
+              <span style="font-weight:600;color:${asistioEfectivo ? 'var(--verde)' : va === false ? 'var(--rojo)' : 'var(--marron-suave)'}">
+                ${asistioEfectivo ? '✓ Asistió' : va === false ? '✗ No asistió' : '–'}
+              </span>
+            </div>
+          `;
+        }
+      }).join('');
+
+      app.innerHTML = `
+        <div class="pantalla">
+          <div class="cabecera-simple">
+            <button class="btn-volver" onclick="cargarPanelAdmin()">‹</button>
+            <h2 style="font-size:15px">${escapeHtml(nombreCompleto)}</h2>
+          </div>
+          <div class="contenido">
+            <div class="nav-mes-historial">
+              <button class="btn-icono-pequeno" onclick="cambiarMesHistorialAdmin(-1, '${alumnoId}', '${escapeHtml(nombreCompleto)}')">‹</button>
+              <span class="nombre-mes-historial">${nombreMes}</span>
+              <button class="btn-icono-pequeno" onclick="cambiarMesHistorialAdmin(1, '${alumnoId}', '${escapeHtml(nombreCompleto)}')">›</button>
+            </div>
+            ${renderCalendarioMes(anyo, mes, diasMes, registrosConCambios)}
+            <div class="resumen-mes-familia" style="margin-top:1rem;grid-template-columns:1fr 1fr">
+              <div class="resumen-mes-stat verde">
+                <div class="resumen-mes-num">${diasAsistidos}</div>
+                <div class="resumen-mes-label">Asistidos</div>
+              </div>
+              <div class="resumen-mes-stat rojo">
+                <div class="resumen-mes-num">${diasNo}</div>
+                <div class="resumen-mes-label">No asistidos</div>
+              </div>
+            </div>
+            <div style="margin-top:1.5rem">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                <label>Registros día a día</label>
+                ${!edicion
+                  ? `<button class="btn-mini azul" onclick="activarEdicionHistorial()">✏️ Editar</button>`
+                  : `<div style="display:flex;gap:8px">
+                      <button class="btn-mini" onclick="cancelarEdicionHistorial()">Cancelar</button>
+                      <button class="btn-mini azul" id="btn-guardar-historial" onclick="guardarCambiosHistorial('${alumnoId}')">💾 Guardar cambios</button>
+                    </div>`
+                }
+              </div>
+              ${edicion && Object.keys(cambiosPendientes).length > 0 ? `
+                <div style="font-size:12px;color:var(--naranja);font-weight:600;margin-bottom:8px">
+                  ${Object.keys(cambiosPendientes).length} día(s) modificado(s) — pulsa "Guardar cambios" para confirmar
+                </div>
+              ` : ''}
+              <div id="lista-dias-historial">${filasEdicion}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    };
+
+    // Funciones de edición accesibles globalmente
+    window.activarEdicionHistorial = () => {
+      estado.modoEdicionHistorial = true;
+      renderAdmin();
+    };
+
+    window.cancelarEdicionHistorial = () => {
+      estado.modoEdicionHistorial = false;
+      Object.keys(cambiosPendientes).forEach(k => delete cambiosPendientes[k]);
+      renderAdmin();
+    };
+
+    window.registrarCambioAsistencia = (fecha, va, btnEl) => {
+      if (va === null) {
+        delete cambiosPendientes[fecha];
+        delete mapaRegistros[fecha];
+      } else {
+        cambiosPendientes[fecha] = va;
+      }
+      // Actualizar visual inmediatamente sin re-renderizar todo
+      const col = btnEl.closest('.fila-staff');
+      if (col) {
+        col.querySelectorAll('.dia-toggle').forEach(b => b.classList.remove('activa'));
+        if (va !== null) btnEl.classList.add('activa');
+        col.style.background = 'var(--amarillo-claro,#fffbe6)';
+        col.style.borderRadius = '8px';
+      }
+      // Actualizar contador
+      const contador = document.querySelector('.resumen-mes-num');
+    };
+
+    window.guardarCambiosHistorial = async (alumnoId) => {
+      const btn = document.getElementById('btn-guardar-historial');
+      if (btn) { btn.textContent = 'Guardando…'; btn.disabled = true; }
+
+      const fechas = Object.keys(cambiosPendientes);
+      if (fechas.length === 0) { mostrarToast('No hay cambios que guardar.'); return; }
+
+      try {
+        for (const fecha of fechas) {
+          const va = cambiosPendientes[fecha];
+          await rpc('comedor_admin_editar_asistencia', {
+            p_pin: estado.pinAdmin, p_alumno_id: alumnoId,
+            p_fecha: fecha, p_va: va
+          });
+          mapaRegistros[fecha] = va;
+          delete cambiosPendientes[fecha];
+        }
+        mostrarToast(`${fechas.length} día(s) guardado(s) correctamente ✓`, 2500);
+        estado.modoEdicionHistorial = false;
+        renderAdmin();
+      } catch (e) {
+        mostrarToast('Error al guardar. Inténtalo de nuevo.');
+        if (btn) { btn.textContent = '💾 Guardar cambios'; btn.disabled = false; }
+      }
+    };
+
+    window.__renderHistorialAdmin = renderAdmin;
+    renderAdmin();
+  } catch (e) {
+    mostrarToast('No se pudo cargar el historial.');
+    cargarPanelAdmin();
+  }
+}
+
+function cambiarMesHistorialAdmin(delta, alumnoId, nombreCompleto) {
+  const [anyo, mes] = estado.mesHistorialAdmin.split('-').map(Number);
+  const fecha = new Date(anyo, mes - 1 + delta, 1);
+  estado.mesHistorialAdmin = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+  if (window.__renderHistorialAdmin) window.__renderHistorialAdmin();
 }
 
 async function eliminarAlumno(id, nombre) {
@@ -1473,7 +2228,9 @@ async function generarExcelMensual() {
     const libro = XLSX.utils.book_new();
     const nombreMes = new Date(anyo, numMes - 1, 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
 
-    Object.keys(porClase).sort().forEach(clase => {
+    // Ordenar clases por el orden real (usando el primero que aparezca en datos)
+    const ordenClases = [...new Set((datos || []).map(a => a.clase_nombre))];
+    ordenClases.forEach(clase => {
       const alumnos = porClase[clase];
 
       // Cabecera: Nombre | Apellidos | Lun 1 | Mar 2 | ... | Total días | Total €
@@ -1943,124 +2700,148 @@ async function cargarEstadisticas() {
   }
 }
 
-// ----- TAB CONFIG -----
-
-// ===== TAB CALENDARIO (días bloqueados / festivos) =====
+// ----- TAB CALENDARIO -----
 
 function renderTabCalendario() {
   const cont = document.getElementById('contenido-tab-admin');
+
+  if (!estado.mesCalendarioAdmin) {
+    estado.mesCalendarioAdmin = hoyISO().slice(0, 7);
+  }
+
   cont.innerHTML = `<div class="cargando"><div class="spinner"></div>Cargando calendario…</div>`;
-  cargarYRenderCalendario();
+  cargarYRenderCalendarioAdmin();
 }
 
-async function cargarYRenderCalendario() {
+async function cargarYRenderCalendarioAdmin() {
   const cont = document.getElementById('contenido-tab-admin');
   try {
     const { data, error } = await obtenerSupabaseClient()
       .from('comedor_dias_bloqueados')
-      .select('fecha, motivo')
-      .order('fecha', { ascending: true });
-
+      .select('fecha, motivo');
     if (error) throw error;
-    const bloqueados = data || [];
 
-    cont.innerHTML = `
-      <div class="tarjeta-admin">
-        <h3 style="margin:0 0 12px;font-size:15px;color:var(--marron-oscuro)">Añadir día no lectivo</h3>
-        <div class="form-grupo">
-          <label>Fecha</label>
-          <input type="date" id="cal-fecha" style="width:100%">
-        </div>
-        <div class="form-grupo">
-          <label>Motivo <span style="font-weight:400;color:var(--marron-suave)">(opcional)</span></label>
-          <input type="text" id="cal-motivo" placeholder="Ej: Festivo local, Puente, Vacaciones…" style="width:100%">
-        </div>
-        <button class="btn-principal azul" onclick="bloquearDia()">Bloquear día</button>
-      </div>
+    estado.diasBloqueados = {};
+    (data || []).forEach(b => { estado.diasBloqueados[b.fecha] = b.motivo || ''; });
 
-      <div class="tarjeta-admin">
-        <h3 style="margin:0 0 12px;font-size:15px;color:var(--marron-oscuro)">Días bloqueados</h3>
-        <div id="lista-dias-bloqueados">
-          ${bloqueados.length === 0
-            ? `<p style="font-size:13px;color:var(--marron-suave);margin:0">No hay ningún día bloqueado.</p>`
-            : bloqueados.map(b => {
-                const fecha = new Date(b.fecha + 'T12:00:00');
-                const etiqueta = fecha.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-                const etiquetaCap = etiqueta.charAt(0).toUpperCase() + etiqueta.slice(1);
-                return `
-                  <div class="fila-dia-bloqueado" id="fila-bloq-${b.fecha}">
-                    <div class="fila-dia-bloqueado-info">
-                      <span class="fila-dia-bloqueado-fecha">🔒 ${etiquetaCap}</span>
-                      ${b.motivo ? `<span class="fila-dia-bloqueado-motivo">${escapeHtml(b.motivo)}</span>` : ''}
-                    </div>
-                    <button class="btn-peligro-mini" onclick="desbloquearDia('${b.fecha}')">Quitar</button>
-                  </div>
-                `;
-              }).join('')
-          }
-        </div>
-      </div>
-    `;
+    renderCalendarioAdminUI(cont);
   } catch (e) {
-    cont.innerHTML = `<div class="vacio-estado"><p>No se pudo cargar el calendario.</p></div>`;
+    cont.innerHTML = `<div class="vacio-estado"><p>No se pudo cargar el calendario.</p><p style="font-size:12px;color:#999">${escapeHtml(String(e))}</p></div>`;
   }
 }
 
-async function bloquearDia() {
-  const fecha = document.getElementById('cal-fecha').value;
-  const motivo = document.getElementById('cal-motivo').value.trim();
+function renderCalendarioAdminUI(cont) {
+  const mes = estado.mesCalendarioAdmin || hoyISO().slice(0, 7);
+  const [anyo, mesNum] = mes.split('-').map(Number);
+  const ultimoDia = new Date(anyo, mesNum, 0).getDate();
+  const nombreMes = new Date(anyo, mesNum - 1, 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
 
-  if (!fecha) {
-    mostrarToast('Selecciona una fecha.');
-    return;
+  const diasMes = [];
+  for (let d = 1; d <= ultimoDia; d++) {
+    const fecha = `${mes}-${String(d).padStart(2, '0')}`;
+    const diaSemana = new Date(anyo, mesNum - 1, d).getDay();
+    diasMes.push({ fecha, diaSemana, laborable: diaSemana !== 0 && diaSemana !== 6 });
   }
 
-  // Verificar que no sea fin de semana
-  const diaSemana = new Date(fecha + 'T12:00:00').getDay();
-  if (diaSemana === 0 || diaSemana === 6) {
-    mostrarToast('Los sábados y domingos ya están bloqueados automáticamente.');
-    return;
-  }
+  // Generar cabeceras días semana
+  const cabeceras = ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa', 'Do'].map(d =>
+    `<div class="cal-cabecera">${d}</div>`
+  ).join('');
 
-  try {
-    const { error } = await obtenerSupabaseClient()
-      .from('comedor_dias_bloqueados')
-      .upsert({ fecha, motivo }, { onConflict: 'fecha' });
+  // Primer día del mes (ajustar a lunes=0)
+  const primerDia = diasMes[0].diaSemana;
+  const offset = primerDia === 0 ? 6 : primerDia - 1;
+  const celdas = Array(offset).fill('<div class="cal-dia vacio"></div>');
 
-    if (error) throw error;
+  diasMes.forEach(({ fecha, diaSemana, laborable }) => {
+    const d = parseInt(fecha.split('-')[2]);
+    const esBloqueado = estado.diasBloqueados[fecha] !== undefined;
+    const esFinDeSemana = !laborable;
+    const motivo = estado.diasBloqueados[fecha] || '';
 
-    mostrarToast('Día bloqueado correctamente.');
-    document.getElementById('cal-fecha').value = '';
-    document.getElementById('cal-motivo').value = '';
-    cargarYRenderCalendario();
-  } catch (e) {
-    mostrarToast('No se pudo bloquear el día. Inténtalo de nuevo.');
-  }
+    if (esFinDeSemana) {
+      celdas.push(`<div class="cal-dia finde">${d}</div>`);
+      return;
+    }
+
+    if (esBloqueado) {
+      celdas.push(`
+        <div class="cal-dia cal-admin-bloqueado" title="${escapeHtml(motivo)}"
+             onclick="adminToggleDia('${fecha}', true, '${escapeHtml(motivo).replace(/'/g, '&#39;')}')">
+          🔒<span class="cal-dia-num">${d}</span>
+        </div>`);
+    } else {
+      celdas.push(`
+        <div class="cal-dia cal-admin-libre" onclick="adminToggleDia('${fecha}', false, '')">
+          ${d}
+        </div>`);
+    }
+  });
+
+  const mesPrev = mes === '2026-01' ? '2025-12' : `${mesNum === 1 ? anyo - 1 : anyo}-${String(mesNum === 1 ? 12 : mesNum - 1).padStart(2, '0')}`;
+  const mesSig = mesNum === 12 ? `${anyo + 1}-01` : `${anyo}-${String(mesNum + 1).padStart(2, '0')}`;
+
+  cont.innerHTML = `
+    <div class="tarjeta-admin">
+      <h3 style="margin:0 0 12px;font-size:15px;color:var(--marron)">🗓️ Días bloqueados (festivos, puentes, vacaciones)</h3>
+      <p style="font-size:12px;color:var(--marron-suave);margin:0 0 16px">
+        Pulsa un día laborable para bloquearlo o desbloquearlo. Los días bloqueados aparecerán con 🔒 en la vista de las familias.
+      </p>
+
+      <div class="cal-nav">
+        <button class="btn-cal-nav" onclick="cambiarMesCalendarioAdmin('${mesPrev}')">‹</button>
+        <span class="cal-titulo-mes">${nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1)}</span>
+        <button class="btn-cal-nav" onclick="cambiarMesCalendarioAdmin('${mesSig}')">›</button>
+      </div>
+
+      <div class="cal-grid">
+        ${cabeceras}
+        ${celdas.join('')}
+      </div>
+
+      <div style="margin-top:16px;display:flex;gap:12px;flex-wrap:wrap;font-size:12px">
+        <span><span style="display:inline-block;width:12px;height:12px;background:#c0392b;border-radius:3px;vertical-align:middle;margin-right:4px"></span>Bloqueado</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:#e8d5c0;border-radius:3px;vertical-align:middle;margin-right:4px"></span>Fin de semana</span>
+        <span><span style="display:inline-block;width:12px;height:12px;background:#f5f0ea;border-radius:3px;vertical-align:middle;margin-right:4px"></span>Día lectivo</span>
+      </div>
+    </div>
+  `;
 }
 
-async function desbloquearDia(fecha) {
-  try {
+function cambiarMesCalendarioAdmin(mes) {
+  estado.mesCalendarioAdmin = mes;
+  renderCalendarioAdminUI(document.getElementById('contenido-tab-admin'));
+}
+
+async function adminToggleDia(fecha, estaBloqueado, motivoActual) {
+  if (estaBloqueado) {
+    // Desbloquear
+    if (!confirm(`¿Desbloquear el día ${formatearFechaLarga(fecha)}?`)) return;
     const { error } = await obtenerSupabaseClient()
       .from('comedor_dias_bloqueados')
       .delete()
       .eq('fecha', fecha);
-
-    if (error) throw error;
-
-    mostrarToast('Día desbloqueado.');
-    const fila = document.getElementById(`fila-bloq-${fecha}`);
-    if (fila) fila.remove();
-
-    const lista = document.getElementById('lista-dias-bloqueados');
-    if (lista && lista.children.length === 0) {
-      lista.innerHTML = `<p style="font-size:13px;color:var(--marron-suave);margin:0">No hay ningún día bloqueado.</p>`;
-    }
-  } catch (e) {
-    mostrarToast('No se pudo desbloquear el día.');
+    if (error) { alert('Error al desbloquear: ' + error.message); return; }
+    delete estado.diasBloqueados[fecha];
+  } else {
+    // Bloquear
+    const motivo = prompt(`Bloquear el día ${formatearFechaLarga(fecha)}\n\nMotivo (opcional):`, '') ;
+    if (motivo === null) return; // canceló
+    const { error } = await obtenerSupabaseClient()
+      .from('comedor_dias_bloqueados')
+      .upsert({ fecha, motivo: motivo.trim() });
+    if (error) { alert('Error al bloquear: ' + error.message); return; }
+    estado.diasBloqueados[fecha] = motivo.trim();
   }
+  renderCalendarioAdminUI(document.getElementById('contenido-tab-admin'));
 }
 
-// ===== FIN TAB CALENDARIO =====
+function formatearFechaLarga(fecha) {
+  const [a, m, d] = fecha.split('-').map(Number);
+  return new Date(a, m - 1, d).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+// ----- TAB CONFIG -----
 
 function renderTabConfig() {
   const cont = document.getElementById('contenido-tab-admin');
@@ -2085,43 +2866,67 @@ async function cargarYRenderConfig() {
       </div>
 
       <div class="tarjeta-admin">
-        <div class="form-grupo" style="margin-bottom:6px"><label>Menú mensual</label></div>
-        <div id="menu-actual-info"><div class="cargando" style="padding:1rem"><div class="spinner"></div></div></div>
-        <input type="file" id="menu-archivo-input" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="manejarSubidaMenu(this)">
-        <button class="btn-secundario" style="margin-top:10px" onclick="document.getElementById('menu-archivo-input').click()">📋 Subir nuevo menú (PDF o imagen)</button>
-        <div id="resultado-subida-menu"></div>
+        <div class="form-grupo" style="margin-bottom:6px"><label>Menús disponibles para las familias</label></div>
+        <p style="font-size:12.5px;color:var(--marron-suave);font-weight:500;margin:0 0 12px">
+          Cada menú que subas aparecerá en el desplegable de las familias con el nombre que le pongas.
+        </p>
+        <div id="lista-menus-admin"><div class="cargando" style="padding:1rem"><div class="spinner"></div></div></div>
+
+        <div style="margin-top:14px;border-top:1px solid var(--crema-oscuro);padding-top:14px">
+          <div class="form-grupo"><label>Nombre del menú (aparecerá en el desplegable)</label>
+            <input id="nuevo-menu-nombre" placeholder="Ej: Menú estándar, Menú sin gluten, Menú octubre...">
+          </div>
+          <input type="file" id="menu-archivo-input" accept=".pdf,.jpg,.jpeg,.png" style="display:none" onchange="manejarSubidaMenuNuevo(this)">
+          <button class="btn-secundario" onclick="prepararSubidaMenu()">📋 Subir PDF o imagen</button>
+          <div id="resultado-subida-menu" style="margin-top:8px"></div>
+        </div>
       </div>
     `;
-    cargarInfoMenuActual();
+    cargarListaMenusAdmin();
   } catch (e) {
     cont.innerHTML = `<div class="vacio-estado"><p>No se pudieron cargar los ajustes.</p></div>`;
   }
 }
 
-async function cargarInfoMenuActual() {
-  const cont = document.getElementById('menu-actual-info');
+async function cargarListaMenusAdmin() {
+  const cont = document.getElementById('lista-menus-admin');
   if (!cont) return;
-  try {
-    const { data } = await supabaseClient.from('comedor_menu_actual').select('*').eq('id', 1).single();
-    if (data && data.nombre_archivo) {
-      const fecha = new Date(data.subido_en).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
-      cont.innerHTML = `
-        <div class="fila-staff" style="margin-bottom:10px">
-          <span class="punto-estado si"></span>
-          <span>${escapeHtml(data.nombre_archivo)} <span style="color:var(--marron-suave);font-weight:500">· subido el ${fecha}</span></span>
-        </div>
-      `;
-    } else {
-      cont.innerHTML = `<p style="font-size:13px;color:var(--marron-suave);font-weight:500;margin:0 0 10px">Todavía no se ha subido ningún menú.</p>`;
-    }
-  } catch (e) {
-    cont.innerHTML = `<p style="font-size:13px;color:var(--marron-suave);font-weight:500;margin:0 0 10px">Todavía no se ha subido ningún menú.</p>`;
+  const menus = await cargarMenusDisponibles();
+  _menusCargados = menus;
+  if (!menus || menus.length === 0) {
+    cont.innerHTML = `<p style="font-size:13px;color:var(--marron-suave);font-weight:500;margin:0">Todavía no hay ningún menú subido.</p>`;
+    return;
   }
+  cont.innerHTML = menus.map(m => `
+    <div class="fila-staff" style="margin-bottom:6px">
+      <span class="punto-estado si"></span>
+      <span style="flex:1;font-weight:600">${escapeHtml(m.nombre)}</span>
+      <button class="btn-mini" onclick="_previsualizarMenu('${escapeHtml(m.ruta_storage)}')">Ver</button>
+      <button class="btn-mini rojo" onclick="eliminarMenu('${m.id}', '${escapeHtml(m.nombre)}')">Eliminar</button>
+    </div>
+  `).join('');
 }
 
-async function manejarSubidaMenu(inputEl) {
+function _previsualizarMenu(ruta) {
+  _abrirMenuPorRuta(ruta);
+}
+
+function prepararSubidaMenu() {
+  const nombre = document.getElementById('nuevo-menu-nombre').value.trim();
+  if (!nombre) {
+    mostrarToast('Escribe primero el nombre del menú.');
+    document.getElementById('nuevo-menu-nombre').focus();
+    return;
+  }
+  document.getElementById('menu-archivo-input').click();
+}
+
+async function manejarSubidaMenuNuevo(inputEl) {
   const archivo = inputEl.files[0];
   if (!archivo) return;
+
+  const nombre = document.getElementById('nuevo-menu-nombre').value.trim();
+  if (!nombre) { mostrarToast('Escribe un nombre para el menú.'); return; }
 
   const resultadoCont = document.getElementById('resultado-subida-menu');
   resultadoCont.innerHTML = `<div class="cargando" style="padding:1rem"><div class="spinner"></div>Subiendo menú…</div>`;
@@ -2138,19 +2943,34 @@ async function manejarSubidaMenu(inputEl) {
 
     if (errorSubida) throw errorSubida;
 
-    await rpc('comedor_admin_actualizar_menu', {
+    await rpc('comedor_admin_crear_menu', {
       p_pin: estado.pinAdmin,
-      p_nombre_archivo: archivo.name,
+      p_nombre: nombre,
       p_ruta_storage: nombreStorage,
-      p_tipo_archivo: tipoArchivo
+      p_tipo_archivo: tipoArchivo,
+      p_orden: 0
     });
 
-    resultadoCont.innerHTML = `<div class="pin-generado visible">✅ Menú actualizado correctamente.</div>`;
-    await cargarInfoMenuActual();
+    resultadoCont.innerHTML = `<div class="pin-generado visible">✅ Menú «${escapeHtml(nombre)}» subido correctamente.</div>`;
+    document.getElementById('nuevo-menu-nombre').value = '';
+    _menusCargados = null; // invalidar caché
+    await cargarListaMenusAdmin();
   } catch (e) {
     resultadoCont.innerHTML = `<div class="mensaje-error visible">No se pudo subir el menú. Inténtalo de nuevo.</div>`;
   }
   inputEl.value = '';
+}
+
+async function eliminarMenu(id, nombre) {
+  if (!confirm(`¿Eliminar el menú «${nombre}»? Las familias ya no podrán consultarlo.`)) return;
+  try {
+    await rpc('comedor_admin_eliminar_menu', { p_pin: estado.pinAdmin, p_id: id });
+    mostrarToast(`Menú «${nombre}» eliminado.`, 2500);
+    _menusCargados = null;
+    await cargarListaMenusAdmin();
+  } catch (e) {
+    mostrarToast('No se pudo eliminar el menú.');
+  }
 }
 
 

@@ -818,7 +818,109 @@
     margin-bottom: 1rem;
   }
 
-  /* ===== VISTA SEMANAL FAMILIAS ===== */
+  /* ===== PESTAÑAS FAMILIA ===== */
+  .tabs-familia {
+    display: flex;
+    gap: 0;
+    background: var(--crema-oscuro);
+    border-radius: 12px;
+    padding: 4px;
+    margin: 0 1rem 0;
+  }
+  .tab-familia {
+    flex: 1;
+    padding: 10px 6px;
+    border-radius: 9px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--marron-suave);
+    background: transparent;
+    transition: all 0.15s;
+  }
+  .tab-familia.activa {
+    background: var(--blanco);
+    color: var(--naranja);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  }
+
+  /* ===== HISTORIAL / CALENDARIO ===== */
+  .nav-mes-historial {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+  .nombre-mes-historial {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--marron);
+    text-transform: capitalize;
+  }
+  .calendario-mes {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+    margin-bottom: 8px;
+  }
+  .cal-cabecera {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--marron-suave);
+    padding: 4px 0;
+  }
+  .cal-dia {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .cal-dia.vacio { background: transparent; }
+  .cal-dia.finde { color: var(--marron-suave); background: transparent; font-weight: 400; }
+  .cal-dia.asistio { background: var(--verde-claro); color: var(--verde-oscuro); }
+  .cal-dia.no-asistio { background: var(--rojo-claro); color: var(--rojo-oscuro); }
+  .cal-dia.sin-marcar { background: var(--crema-oscuro); color: var(--marron-suave); }
+  .cal-dia.hoy { outline: 2px solid var(--naranja); }
+  .leyenda-cal {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 1rem;
+  }
+  .leyenda-item {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+  .leyenda-item.asistio { background: var(--verde-claro); color: var(--verde-oscuro); }
+  .leyenda-item.no-asistio { background: var(--rojo-claro); color: var(--rojo-oscuro); }
+  .leyenda-item.sin-marcar { background: var(--crema-oscuro); color: var(--marron-suave); }
+  .resumen-mes-familia {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+  }
+  .resumen-mes-stat {
+    text-align: center;
+    padding: 12px 6px;
+    border-radius: 12px;
+    background: var(--crema-oscuro);
+  }
+  .resumen-mes-num {
+    font-size: 20px;
+    font-weight: 800;
+    margin-bottom: 2px;
+  }
+  .resumen-mes-label { font-size: 11px; font-weight: 600; color: var(--marron-suave); }
+  .resumen-mes-stat.verde .resumen-mes-num { color: var(--verde); }
+  .resumen-mes-stat.rojo .resumen-mes-num { color: var(--rojo); }
+  .resumen-mes-stat.naranja .resumen-mes-num { color: var(--naranja); }
+  .punto-estado.sin-marcar { background: var(--marron-suave); opacity: 0.4; }
+
   .etiqueta-semana {
     font-size: 12px;
     font-weight: 700;
@@ -867,122 +969,6 @@
   .dia-semana-fecha.hoy {
     background: var(--naranja);
     color: var(--blanco);
-  }
-
-  /* Días bloqueados (festivos, puentes, fines de semana) */
-  .dia-bloqueado {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    background: #fff0f0;
-    border-radius: 8px;
-    padding: 6px 2px;
-    border: 1.5px solid #f5c6c6;
-    opacity: 0.85;
-  }
-
-  .dia-bloqueado .dia-semana-nombre {
-    color: #c0392b;
-  }
-
-  .dia-bloqueado .dia-semana-fecha {
-    color: #c0392b;
-  }
-
-  .dia-bloqueado-icono {
-    font-size: 18px;
-    line-height: 1;
-    margin: 2px 0;
-  }
-
-  .dia-bloqueado-motivo {
-    font-size: 9px;
-    color: #c0392b;
-    text-align: center;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    padding: 0 2px;
-  }
-
-  /* Filas en la lista de días bloqueados (tab Calendario) */
-  .fila-dia-bloqueado {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--crema-oscuro);
-  }
-
-  .fila-dia-bloqueado:last-child { border-bottom: none; }
-
-  .fila-dia-bloqueado-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .fila-dia-bloqueado-fecha {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--marron);
-  }
-
-  .fila-dia-bloqueado-motivo {
-    font-size: 12px;
-    color: var(--marron-suave);
-  }
-
-  .btn-peligro-mini {
-    background: #fff0f0;
-    border: 1.5px solid #f5c6c6;
-    color: #c0392b;
-    border-radius: 6px;
-    padding: 5px 10px;
-    font-size: 12px;
-    font-weight: 600;
-    cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  .btn-peligro-mini:active { background: #fdd; }
-
-  .dia-fin-semana {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    background: #f8f0f0;
-    border-radius: 8px;
-    padding: 6px 2px;
-    border: 1.5px dashed #e0b0b0;
-    opacity: 0.7;
-  }
-
-  .dia-fin-semana .dia-semana-nombre {
-    color: #b0828e;
-    font-size: 10px;
-  }
-
-  .dia-fin-semana .dia-semana-fecha {
-    color: #b0828e;
-    font-size: 12px;
-  }
-
-  .dia-fin-semana-icono {
-    font-size: 14px;
-    margin: 2px 0;
   }
 
   .dia-toggle {
@@ -1110,6 +1096,126 @@
     font-size: 13px;
     font-weight: 600;
     line-height: 1.5;
+  }
+
+  /* ===== VISTA SEMANAL: DÍAS BLOQUEADOS Y FIN DE SEMANA ===== */
+  .dia-fin-semana {
+    background: var(--crema-oscuro);
+    opacity: 0.55;
+    border-radius: 8px;
+    padding: 6px 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    min-width: 38px;
+  }
+  .dia-fin-semana .dia-semana-nombre { color: var(--marron-suave); font-size: 11px; font-weight: 600; }
+  .dia-fin-semana .dia-semana-fecha  { color: var(--marron-suave); font-size: 15px; font-weight: 700; }
+
+  .dia-bloqueado {
+    background: #fdecea;
+    border: 1px solid #f5c6c2;
+    border-radius: 8px;
+    padding: 6px 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    min-width: 38px;
+  }
+  .dia-bloqueado .dia-semana-nombre { color: #c0392b; font-size: 11px; font-weight: 600; }
+  .dia-bloqueado .dia-semana-fecha  { color: #c0392b; font-size: 15px; font-weight: 700; }
+  .dia-bloqueado-icono { font-size: 14px; }
+  .dia-bloqueado-motivo { font-size: 9px; color: #c0392b; text-align: center; max-width: 44px; line-height: 1.2; }
+
+  /* ===== CALENDARIO ADMIN: BLOQUEO DE DÍAS ===== */
+  .cal-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .cal-titulo-mes {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--marron);
+    text-transform: capitalize;
+  }
+  .btn-cal-nav {
+    background: var(--crema-oscuro);
+    border: none;
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    font-size: 18px;
+    cursor: pointer;
+    color: var(--marron);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .btn-cal-nav:hover { background: var(--naranja-claro); }
+
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+    margin-bottom: 8px;
+  }
+  .cal-cabecera {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--marron-suave);
+    padding: 4px 0;
+  }
+
+  .cal-admin-libre {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--crema-oscuro);
+    color: var(--marron);
+    cursor: pointer;
+    transition: background 0.15s;
+    border: 2px solid transparent;
+  }
+  .cal-admin-libre:hover { background: var(--naranja-claro); border-color: var(--naranja); }
+
+  .cal-admin-bloqueado {
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #c0392b;
+    color: #fff;
+    cursor: pointer;
+    transition: background 0.15s;
+    gap: 1px;
+  }
+  .cal-admin-bloqueado .cal-dia-num { font-size: 10px; }
+  .cal-admin-bloqueado:hover { background: #a93226; }
+
+  /* cal-bloqueado en historial familia */
+  .cal-bloqueado {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    font-size: 14px;
+    background: #fdecea;
+    border: 1px solid #f5c6c2;
+    cursor: default;
   }
 </style>
 </head>
