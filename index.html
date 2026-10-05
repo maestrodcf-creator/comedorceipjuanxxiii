@@ -869,6 +869,122 @@
     color: var(--blanco);
   }
 
+  /* Días bloqueados (festivos, puentes, fines de semana) */
+  .dia-bloqueado {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background: #fff0f0;
+    border-radius: 8px;
+    padding: 6px 2px;
+    border: 1.5px solid #f5c6c6;
+    opacity: 0.85;
+  }
+
+  .dia-bloqueado .dia-semana-nombre {
+    color: #c0392b;
+  }
+
+  .dia-bloqueado .dia-semana-fecha {
+    color: #c0392b;
+  }
+
+  .dia-bloqueado-icono {
+    font-size: 18px;
+    line-height: 1;
+    margin: 2px 0;
+  }
+
+  .dia-bloqueado-motivo {
+    font-size: 9px;
+    color: #c0392b;
+    text-align: center;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding: 0 2px;
+  }
+
+  /* Filas en la lista de días bloqueados (tab Calendario) */
+  .fila-dia-bloqueado {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--crema-oscuro);
+  }
+
+  .fila-dia-bloqueado:last-child { border-bottom: none; }
+
+  .fila-dia-bloqueado-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .fila-dia-bloqueado-fecha {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--marron);
+  }
+
+  .fila-dia-bloqueado-motivo {
+    font-size: 12px;
+    color: var(--marron-suave);
+  }
+
+  .btn-peligro-mini {
+    background: #fff0f0;
+    border: 1.5px solid #f5c6c6;
+    color: #c0392b;
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .btn-peligro-mini:active { background: #fdd; }
+
+  .dia-fin-semana {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background: #f8f0f0;
+    border-radius: 8px;
+    padding: 6px 2px;
+    border: 1.5px dashed #e0b0b0;
+    opacity: 0.7;
+  }
+
+  .dia-fin-semana .dia-semana-nombre {
+    color: #b0828e;
+    font-size: 10px;
+  }
+
+  .dia-fin-semana .dia-semana-fecha {
+    color: #b0828e;
+    font-size: 12px;
+  }
+
+  .dia-fin-semana-icono {
+    font-size: 14px;
+    margin: 2px 0;
+  }
+
   .dia-toggle {
     width: 100%;
     padding: 8px 2px;

@@ -26,7 +26,8 @@ const estado = {
   familiasAdmin: [],
   alumnosAdmin: [],
   clavesProfesoradoAdmin: [],
-  estadisticasAdmin: []
+  estadisticasAdmin: [],
+  diasBloqueados: {}  // { 'YYYY-MM-DD': 'motivo' }
 };
 
 // ===== Utilidades generales =====
@@ -507,15 +508,21 @@ async function cargarPanelFamilias() {
     const desde = semanas[0].dias[0];
     const hasta = semanas[semanas.length - 1].dias[4];
 
-    const filas = await rpc('comedor_asistencia_familia', {
-      p_pin: estado.pinFamilia, p_desde: desde, p_hasta: hasta
-    });
+    const [filas, bloqueados] = await Promise.all([
+      rpc('comedor_asistencia_familia', { p_pin: estado.pinFamilia, p_desde: desde, p_hasta: hasta }),
+      obtenerSupabaseClient().from('comedor_dias_bloqueados').select('fecha, motivo').gte('fecha', desde).lte('fecha', hasta)
+    ]);
 
     estado.asistenciaSemana = {};
     estado.alumnos.forEach(a => { estado.asistenciaSemana[a.id] = {}; });
     (filas || []).forEach(f => {
       if (!estado.asistenciaSemana[f.alumno_id]) estado.asistenciaSemana[f.alumno_id] = {};
       estado.asistenciaSemana[f.alumno_id][f.fecha] = f.va;
+    });
+
+    estado.diasBloqueados = {};
+    ((bloqueados && bloqueados.data) || []).forEach(b => {
+      estado.diasBloqueados[b.fecha] = b.motivo || '';
     });
 
     navegar('panel-familias');
@@ -535,14 +542,15 @@ function semanasFamilia() {
   // Lunes de esta semana
   const diasHastaLunes = diaSemana === 0 ? -6 : 1 - diaSemana;
   const lunesEsta = sumarDias(hoy, diasHastaLunes);
-  const diasEsta = [0, 1, 2, 3, 4].map(i => sumarDias(lunesEsta, i));
+  // Lun–Dom (7 días)
+  const diasEsta = [0, 1, 2, 3, 4, 5, 6].map(i => sumarDias(lunesEsta, i));
 
   const semanas = [{ label: 'Esta semana', dias: diasEsta }];
 
   // El domingo (diaSemana === 0) o sábado (6) se abre la semana siguiente
   if (diaSemana === 0 || diaSemana === 6) {
     const lunesSig = sumarDias(lunesEsta, 7);
-    const diasSig = [0, 1, 2, 3, 4].map(i => sumarDias(lunesSig, i));
+    const diasSig = [0, 1, 2, 3, 4, 5, 6].map(i => sumarDias(lunesSig, i));
     semanas.push({ label: 'Semana siguiente', dias: diasSig });
   }
 
@@ -615,9 +623,36 @@ function crearTarjetaAlumnoSemanal(alumno, dias, hoy) {
     const va = (estado.asistenciaSemana[alumno.id] || {})[fecha];
     const esHoy = fecha === hoy;
     const esPasado = fecha < hoy || (esHoy && pasaHora);
+    const esBloqueado = !!estado.diasBloqueados[fecha];
+    const motivoBloqueo = estado.diasBloqueados[fecha] || '';
     const [, , d] = fecha.split('-');
-    const nombreDia = new Date(fecha + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'short' });
+    const fechaObj = new Date(fecha + 'T12:00:00');
+    const diaSem = fechaObj.getDay(); // 0=dom, 6=sab
+    const esFinDeSemana = diaSem === 0 || diaSem === 6;
+    const nombreDia = fechaObj.toLocaleDateString('es-ES', { weekday: 'short' });
     const etiqueta = nombreDia.charAt(0).toUpperCase() + nombreDia.slice(1, 3);
+
+    // Fin de semana: mostrar en gris rojizo, sin interacción
+    if (esFinDeSemana) {
+      return `
+        <div class="dia-fin-semana" title="${etiqueta}">
+          <div class="dia-semana-nombre">${etiqueta}</div>
+          <div class="dia-semana-fecha">${parseInt(d)}</div>
+          <div class="dia-fin-semana-icono">—</div>
+        </div>
+      `;
+    }
+
+    if (esBloqueado) {
+      return `
+        <div class="dia-bloqueado" title="${escapeHtml(motivoBloqueo)}">
+          <div class="dia-semana-nombre">${etiqueta}</div>
+          <div class="dia-semana-fecha">${parseInt(d)}</div>
+          <div class="dia-bloqueado-icono">🔒</div>
+          <div class="dia-bloqueado-motivo">${escapeHtml(motivoBloqueo) || 'No lectivo'}</div>
+        </div>
+      `;
+    }
 
     return `
       <div class="dia-semana-col">
@@ -1074,6 +1109,7 @@ function renderPanelAdmin() {
           <button class="tab-admin ${estado.tabAdminActiva === 'familias' ? 'activa' : ''}" onclick="cambiarTabAdmin('familias')">Familias</button>
           <button class="tab-admin ${estado.tabAdminActiva === 'clases' ? 'activa' : ''}" onclick="cambiarTabAdmin('clases')">Clases</button>
           <button class="tab-admin ${estado.tabAdminActiva === 'estadisticas' ? 'activa' : ''}" onclick="cambiarTabAdmin('estadisticas')">Estadísticas</button>
+          <button class="tab-admin ${estado.tabAdminActiva === 'calendario' ? 'activa' : ''}" onclick="cambiarTabAdmin('calendario')">Calendario</button>
           <button class="tab-admin ${estado.tabAdminActiva === 'config' ? 'activa' : ''}" onclick="cambiarTabAdmin('config')">Ajustes</button>
         </div>
         <div id="contenido-tab-admin"></div>
@@ -1095,6 +1131,7 @@ function renderTabAdminActiva() {
     case 'familias': return renderTabFamilias();
     case 'clases': return renderTabClases();
     case 'estadisticas': return renderTabEstadisticas();
+    case 'calendario': return renderTabCalendario();
     case 'config': return renderTabConfig();
   }
 }
@@ -1907,6 +1944,123 @@ async function cargarEstadisticas() {
 }
 
 // ----- TAB CONFIG -----
+
+// ===== TAB CALENDARIO (días bloqueados / festivos) =====
+
+function renderTabCalendario() {
+  const cont = document.getElementById('contenido-tab-admin');
+  cont.innerHTML = `<div class="cargando"><div class="spinner"></div>Cargando calendario…</div>`;
+  cargarYRenderCalendario();
+}
+
+async function cargarYRenderCalendario() {
+  const cont = document.getElementById('contenido-tab-admin');
+  try {
+    const { data, error } = await obtenerSupabaseClient()
+      .from('comedor_dias_bloqueados')
+      .select('fecha, motivo')
+      .order('fecha', { ascending: true });
+
+    if (error) throw error;
+    const bloqueados = data || [];
+
+    cont.innerHTML = `
+      <div class="tarjeta-admin">
+        <h3 style="margin:0 0 12px;font-size:15px;color:var(--marron-oscuro)">Añadir día no lectivo</h3>
+        <div class="form-grupo">
+          <label>Fecha</label>
+          <input type="date" id="cal-fecha" style="width:100%">
+        </div>
+        <div class="form-grupo">
+          <label>Motivo <span style="font-weight:400;color:var(--marron-suave)">(opcional)</span></label>
+          <input type="text" id="cal-motivo" placeholder="Ej: Festivo local, Puente, Vacaciones…" style="width:100%">
+        </div>
+        <button class="btn-principal azul" onclick="bloquearDia()">Bloquear día</button>
+      </div>
+
+      <div class="tarjeta-admin">
+        <h3 style="margin:0 0 12px;font-size:15px;color:var(--marron-oscuro)">Días bloqueados</h3>
+        <div id="lista-dias-bloqueados">
+          ${bloqueados.length === 0
+            ? `<p style="font-size:13px;color:var(--marron-suave);margin:0">No hay ningún día bloqueado.</p>`
+            : bloqueados.map(b => {
+                const fecha = new Date(b.fecha + 'T12:00:00');
+                const etiqueta = fecha.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                const etiquetaCap = etiqueta.charAt(0).toUpperCase() + etiqueta.slice(1);
+                return `
+                  <div class="fila-dia-bloqueado" id="fila-bloq-${b.fecha}">
+                    <div class="fila-dia-bloqueado-info">
+                      <span class="fila-dia-bloqueado-fecha">🔒 ${etiquetaCap}</span>
+                      ${b.motivo ? `<span class="fila-dia-bloqueado-motivo">${escapeHtml(b.motivo)}</span>` : ''}
+                    </div>
+                    <button class="btn-peligro-mini" onclick="desbloquearDia('${b.fecha}')">Quitar</button>
+                  </div>
+                `;
+              }).join('')
+          }
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    cont.innerHTML = `<div class="vacio-estado"><p>No se pudo cargar el calendario.</p></div>`;
+  }
+}
+
+async function bloquearDia() {
+  const fecha = document.getElementById('cal-fecha').value;
+  const motivo = document.getElementById('cal-motivo').value.trim();
+
+  if (!fecha) {
+    mostrarToast('Selecciona una fecha.');
+    return;
+  }
+
+  // Verificar que no sea fin de semana
+  const diaSemana = new Date(fecha + 'T12:00:00').getDay();
+  if (diaSemana === 0 || diaSemana === 6) {
+    mostrarToast('Los sábados y domingos ya están bloqueados automáticamente.');
+    return;
+  }
+
+  try {
+    const { error } = await obtenerSupabaseClient()
+      .from('comedor_dias_bloqueados')
+      .upsert({ fecha, motivo }, { onConflict: 'fecha' });
+
+    if (error) throw error;
+
+    mostrarToast('Día bloqueado correctamente.');
+    document.getElementById('cal-fecha').value = '';
+    document.getElementById('cal-motivo').value = '';
+    cargarYRenderCalendario();
+  } catch (e) {
+    mostrarToast('No se pudo bloquear el día. Inténtalo de nuevo.');
+  }
+}
+
+async function desbloquearDia(fecha) {
+  try {
+    const { error } = await obtenerSupabaseClient()
+      .from('comedor_dias_bloqueados')
+      .delete()
+      .eq('fecha', fecha);
+
+    if (error) throw error;
+
+    mostrarToast('Día desbloqueado.');
+    const fila = document.getElementById(`fila-bloq-${fecha}`);
+    if (fila) fila.remove();
+
+    const lista = document.getElementById('lista-dias-bloqueados');
+    if (lista && lista.children.length === 0) {
+      lista.innerHTML = `<p style="font-size:13px;color:var(--marron-suave);margin:0">No hay ningún día bloqueado.</p>`;
+    }
+  } catch (e) {
+    mostrarToast('No se pudo desbloquear el día.');
+  }
+}
+
+// ===== FIN TAB CALENDARIO =====
 
 function renderTabConfig() {
   const cont = document.getElementById('contenido-tab-admin');
