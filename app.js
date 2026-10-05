@@ -2726,7 +2726,8 @@ async function cargarYRenderCalendarioAdmin() {
 
     renderCalendarioAdminUI(cont);
   } catch (e) {
-    cont.innerHTML = `<div class="vacio-estado"><p>No se pudo cargar el calendario.</p><p style="font-size:12px;color:#999">${escapeHtml(String(e))}</p></div>`;
+    const msg = (e && e.message) ? e.message : (typeof e === 'string' ? e : JSON.stringify(e));
+    cont.innerHTML = `<div class="vacio-estado"><p>No se pudo cargar el calendario.</p><p style="font-size:12px;color:#999">${escapeHtml(msg)}</p></div>`;
   }
 }
 
