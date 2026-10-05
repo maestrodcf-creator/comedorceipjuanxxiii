@@ -1243,9 +1243,74 @@ function renderPanelProfesorado() {
   const f = estado.fechaProfesoradoSeleccionada;
   const lista = estado.listadoProfesorado;
 
+  // Determinar si es fin de semana o día bloqueado
+  const diaSem = new Date(f + 'T12:00:00').getDay();
+  const esFinDeSemana = diaSem === 0 || diaSem === 6;
+  const esBloqueado = estado.diasBloqueados[f] !== undefined;
+  const diaNoLectivo = esFinDeSemana || esBloqueado;
+
   const totalSi = lista.filter(a => a.va === true).length;
   const totalNo = lista.filter(a => a.va === false).length;
   const sinMarcar = lista.filter(a => a.va === null || a.va === undefined).length;
+
+  // Bloque central: bloqueado o editable
+  let contenidoCentral;
+  if (diaNoLectivo) {
+    const icono = esFinDeSemana ? '📅' : '🔒';
+    const mensaje = esFinDeSemana
+      ? 'Fin de semana — el comedor no está activo.'
+      : `Día bloqueado: <strong>${escapeHtml(estado.diasBloqueados[f] || 'No lectivo')}</strong> — el comedor no está activo.`;
+    contenidoCentral = `
+      <div style="text-align:center;padding:2.5rem 1rem;color:var(--marron-suave)">
+        <div style="font-size:3rem;margin-bottom:1rem">${icono}</div>
+        <p style="font-size:15px;font-weight:600">${mensaje}</p>
+      </div>`;
+  } else {
+    contenidoCentral = `
+      <div class="resumen-staff">
+        <div class="stat-card">
+          <div class="stat-numero verde">${totalSi}</div>
+          <div class="stat-label">Comen hoy</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-numero">${sinMarcar}</div>
+          <div class="stat-label">Sin marcar</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-numero rojo">${totalNo}</div>
+          <div class="stat-label">No vienen</div>
+        </div>
+      </div>
+
+      ${lista.length === 0 ? `
+        <div class="vacio-estado">
+          <span class="emoji-grande">🧒</span>
+          <p>No hay alumnos registrados todavía en esta clase.</p>
+        </div>
+      ` : `
+        <p style="font-size:12.5px;color:var(--marron-suave);font-weight:600;margin:0 0 10px">
+          Puedes confirmar o corregir la asistencia de cada alumno/a sin restricción de hora.
+        </p>
+        <div class="lista-staff">
+          ${lista.map(a => `
+            <div class="fila-staff" style="flex-wrap:wrap;gap:8px;padding:12px 0">
+              <span class="punto-estado ${a.va === true ? 'si' : a.va === false ? 'no' : 'sin-marcar'}"></span>
+              <span style="flex:1;min-width:0">${escapeHtml(a.nombre)} ${escapeHtml(a.apellidos)}
+                ${a.observaciones ? `<span class="etiqueta-obs" style="margin-left:6px">⚠️</span>` : ''}
+              </span>
+              <div style="display:flex;gap:6px;flex-shrink:0">
+                <button class="dia-toggle si ${a.va === true ? 'activa' : ''}"
+                  style="width:48px;padding:8px"
+                  onclick="marcarAsistenciaDocente('${a.alumno_id}', true, this)">✓</button>
+                <button class="dia-toggle no ${a.va === false ? 'activa' : ''}"
+                  style="width:48px;padding:8px"
+                  onclick="marcarAsistenciaDocente('${a.alumno_id}', false, this)">✗</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `}`;
+  }
 
   app.innerHTML = `
     <div class="pantalla">
@@ -1262,51 +1327,7 @@ function renderPanelProfesorado() {
           <button class="btn-icono-pequeno" onclick="cambiarDiaProfesorado(1)">›</button>
         </div>
 
-        <div class="resumen-staff">
-          <div class="stat-card">
-            <div class="stat-numero verde">${totalSi}</div>
-            <div class="stat-label">Comen hoy</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-numero">${sinMarcar}</div>
-            <div class="stat-label">Sin marcar</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-numero rojo">${totalNo}</div>
-            <div class="stat-label">No vienen</div>
-          </div>
-        </div>
-
-        ${avisodiabloqueadoprofe(f)}
-
-        ${lista.length === 0 ? `
-          <div class="vacio-estado">
-            <span class="emoji-grande">🧒</span>
-            <p>No hay alumnos registrados todavía en esta clase.</p>
-          </div>
-        ` : `
-          <p style="font-size:12.5px;color:var(--marron-suave);font-weight:600;margin:0 0 10px">
-            Puedes confirmar o corregir la asistencia de cada alumno/a sin restricción de hora.
-          </p>
-          <div class="lista-staff">
-            ${lista.map(a => `
-              <div class="fila-staff" style="flex-wrap:wrap;gap:8px;padding:12px 0">
-                <span class="punto-estado ${a.va === true ? 'si' : a.va === false ? 'no' : 'sin-marcar'}"></span>
-                <span style="flex:1;min-width:0">${escapeHtml(a.nombre)} ${escapeHtml(a.apellidos)}
-                  ${a.observaciones ? `<span class="etiqueta-obs" style="margin-left:6px">⚠️</span>` : ''}
-                </span>
-                <div style="display:flex;gap:6px;flex-shrink:0">
-                  <button class="dia-toggle si ${a.va === true ? 'activa' : ''}"
-                    style="width:48px;padding:8px"
-                    onclick="marcarAsistenciaDocente('${a.alumno_id}', true, this)">✓</button>
-                  <button class="dia-toggle no ${a.va === false ? 'activa' : ''}"
-                    style="width:48px;padding:8px"
-                    onclick="marcarAsistenciaDocente('${a.alumno_id}', false, this)">✗</button>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        `}
+        ${contenidoCentral}
       </div>
     </div>
   `;
