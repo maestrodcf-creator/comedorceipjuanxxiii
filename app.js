@@ -1256,14 +1256,21 @@ function renderPanelProfesorado() {
   // Bloque central: bloqueado o editable
   let contenidoCentral;
   if (diaNoLectivo) {
-    const icono = esFinDeSemana ? '📅' : '🔒';
-    const mensaje = esFinDeSemana
-      ? 'Fin de semana — el comedor no está activo.'
-      : `Día bloqueado: <strong>${escapeHtml(estado.diasBloqueados[f] || 'No lectivo')}</strong> — el comedor no está activo.`;
+    const icono = esFinDeSemana ? '🗓️' : '🔒';
+    const titulo = esFinDeSemana ? 'Fin de semana' : 'Día no lectivo';
+    const descripcion = esFinDeSemana
+      ? 'El comedor no está activo los fines de semana.'
+      : `Motivo: <strong>${escapeHtml(estado.diasBloqueados[f] || 'No lectivo')}</strong> — el comedor no está activo este día.`;
+    const colorFondo = esFinDeSemana ? '#f0f4ff' : '#fdecea';
+    const colorBorde = esFinDeSemana ? '#c5d3f5' : '#f5c6c2';
+    const colorTexto = esFinDeSemana ? '#2c4a8a' : '#8b2e26';
     contenidoCentral = `
-      <div style="text-align:center;padding:2.5rem 1rem;color:var(--marron-suave)">
-        <div style="font-size:3rem;margin-bottom:1rem">${icono}</div>
-        <p style="font-size:15px;font-weight:600">${mensaje}</p>
+      <div style="text-align:center;padding:2rem 1rem">
+        <div style="font-size:3.5rem;margin-bottom:0.75rem">${icono}</div>
+        <div style="background:${colorFondo};border:1.5px solid ${colorBorde};border-radius:12px;padding:1rem 1.25rem;color:${colorTexto}">
+          <p style="font-size:16px;font-weight:700;margin:0 0 4px">${titulo}</p>
+          <p style="font-size:13px;margin:0;line-height:1.5">${descripcion}</p>
+        </div>
       </div>`;
   } else {
     contenidoCentral = `
