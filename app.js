@@ -881,9 +881,8 @@ function renderHistorialFamilia() {
 
   const hoyParaContador = hoyISO();
   const alumnosHtml = alumnos.map(({ alumno, registros: reg }) => {
-    // Un día sin marcar = asistió (la familia solo avisa cuando NO va)
-    // Solo contar desde el inicio del comedor
-    const diasAsistidos = diasMes.filter(d => d.laborable && d.fecha >= FECHA_INICIO_COMEDOR && d.fecha <= hoyParaContador && reg[d.fecha] !== false).length;
+    // Solo contar días con confirmación explícita
+    const diasAsistidos = diasMes.filter(d => d.laborable && d.fecha >= FECHA_INICIO_COMEDOR && d.fecha <= hoyParaContador && reg[d.fecha] === true).length;
     const diasNoAsistidos = diasMes.filter(d => d.laborable && d.fecha >= FECHA_INICIO_COMEDOR && reg[d.fecha] === false).length;
     const calHtml = renderCalendarioMesEditable(anyo, mes, diasMes, reg, alumno.id);
 
@@ -2107,8 +2106,8 @@ async function verHistorialAlumnoAdmin(alumnoId, nombreCompleto) {
       // Combinar registros originales con cambios pendientes
       const registrosConCambios = { ...mapaRegistros, ...cambiosPendientes };
       const hoyAdmin2 = hoyISO();
-      // Sin marcar en días pasados = asistió; excluir días antes del inicio del comedor
-      const diasAsistidos = diasMes.filter(d => d.laborable && d.fecha >= FECHA_INICIO_COMEDOR && d.fecha <= hoyAdmin2 && registrosConCambios[d.fecha] !== false).length;
+      // Solo contar días con confirmación explícita
+      const diasAsistidos = diasMes.filter(d => d.laborable && d.fecha >= FECHA_INICIO_COMEDOR && d.fecha <= hoyAdmin2 && registrosConCambios[d.fecha] === true).length;
       const diasNo = diasMes.filter(d => d.laborable && d.fecha >= FECHA_INICIO_COMEDOR && registrosConCambios[d.fecha] === false).length;
       const edicion = estado.modoEdicionHistorial;
 
