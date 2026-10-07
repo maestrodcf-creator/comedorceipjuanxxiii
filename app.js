@@ -558,11 +558,11 @@ function renderLoginFamilias() {
                 style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.3rem;padding:4px;line-height:1"
                 aria-label="Mostrar/ocultar código">👁</button>
             </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
+              <input type="checkbox" id="recordar-familia" style="width:18px;height:18px"> Recordar en este dispositivo
+            </label>
+            <button type="submit" class="btn-principal verde">Entrar</button>
           </form>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
-            <input type="checkbox" id="recordar-familia" style="width:18px;height:18px"> Recordar en este dispositivo
-          </label>
-          <button class="btn-principal verde" onclick="intentarLoginFamilia()">Entrar</button>
         </div>
       </div>
     </div>
@@ -571,13 +571,13 @@ function renderLoginFamilias() {
 
   // Intentar autorellenar con credencial guardada (si el navegador lo permite)
   if (window.PasswordCredential && navigator.credentials) {
-    navigator.credentials.get({ password: true, mediation: 'optional' })
+    navigator.credentials.get({ password: true, mediation: 'silent' })
       .then(cred => {
         if (cred && cred.password) {
           input.value = cred.password.toUpperCase();
         }
       })
-      .catch(() => {}); // silencioso si no hay credencial o el usuario la descarta
+      .catch(() => {}); // silencioso si no hay credencial guardada
   }
 
   input.focus();
@@ -1217,11 +1217,11 @@ function renderLoginProfesorado() {
                 style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.3rem;padding:4px;line-height:1"
                 aria-label="Mostrar/ocultar código">👁</button>
             </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
+              <input type="checkbox" id="recordar-profesorado" style="width:18px;height:18px"> Recordar en este dispositivo
+            </label>
+            <button type="submit" class="btn-principal verde">Entrar</button>
           </form>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
-            <input type="checkbox" id="recordar-profesorado" style="width:18px;height:18px"> Recordar en este dispositivo
-          </label>
-          <button class="btn-principal verde" onclick="intentarLoginProfesorado()">Entrar</button>
         </div>
       </div>
     </div>
@@ -1230,7 +1230,7 @@ function renderLoginProfesorado() {
   input.focus();
   input.addEventListener('input', () => { input.value = input.value.toUpperCase(); });
   if (window.PasswordCredential && navigator.credentials) {
-    navigator.credentials.get({ password: true, mediation: 'optional' })
+    navigator.credentials.get({ password: true, mediation: 'silent' })
       .then(cred => { if (cred && cred.password) input.value = cred.password.toUpperCase(); })
       .catch(() => {});
   }
@@ -1487,11 +1487,11 @@ function renderLoginStaff() {
                 style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.3rem;padding:4px;line-height:1"
                 aria-label="Mostrar/ocultar código">👁</button>
             </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
+              <input type="checkbox" id="recordar-staff" style="width:18px;height:18px"> Recordar en este dispositivo
+            </label>
+            <button type="submit" class="btn-principal">Entrar</button>
           </form>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
-            <input type="checkbox" id="recordar-staff" style="width:18px;height:18px"> Recordar en este dispositivo
-          </label>
-          <button class="btn-principal" onclick="intentarLoginStaff()">Entrar</button>
         </div>
       </div>
     </div>
@@ -1500,7 +1500,7 @@ function renderLoginStaff() {
   input.focus();
   input.addEventListener('input', () => { input.value = input.value.toUpperCase(); });
   if (window.PasswordCredential && navigator.credentials) {
-    navigator.credentials.get({ password: true, mediation: 'optional' })
+    navigator.credentials.get({ password: true, mediation: 'silent' })
       .then(cred => { if (cred && cred.password) input.value = cred.password.toUpperCase(); })
       .catch(() => {});
   }
@@ -1699,11 +1699,11 @@ function renderLoginAdmin() {
                 style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.3rem;padding:4px;line-height:1"
                 aria-label="Mostrar/ocultar código">👁</button>
             </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
+              <input type="checkbox" id="recordar-admin" style="width:18px;height:18px"> Recordar en este dispositivo
+            </label>
+            <button type="submit" class="btn-principal azul">Entrar</button>
           </form>
-          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
-            <input type="checkbox" id="recordar-admin" style="width:18px;height:18px"> Recordar en este dispositivo
-          </label>
-          <button class="btn-principal azul" onclick="intentarLoginAdmin()">Entrar</button>
         </div>
       </div>
     </div>
@@ -1712,7 +1712,7 @@ function renderLoginAdmin() {
   input.focus();
   input.addEventListener('input', () => { input.value = input.value.toUpperCase(); });
   if (window.PasswordCredential && navigator.credentials) {
-    navigator.credentials.get({ password: true, mediation: 'optional' })
+    navigator.credentials.get({ password: true, mediation: 'silent' })
       .then(cred => { if (cred && cred.password) input.value = cred.password.toUpperCase(); })
       .catch(() => {});
   }

@@ -6,7 +6,7 @@
 // Supabase (nunca se cachean asistencia ni alumnos).
 // ============================================
 
-const CACHE_NAME = 'comedor-juanxxiii-v8';
+const CACHE_NAME = 'comedor-juanxxiii-v9';
 const ARCHIVOS_SHELL = [
   './index.html',
   './config.js',
