@@ -534,7 +534,16 @@ function renderLoginFamilias() {
           <h2>Accede con tu PIN</h2>
           <p class="ayuda">Es el código de 6 caracteres que te dio el centro</p>
           <div id="error-familia" class="mensaje-error"></div>
-          <input id="input-pin-familia" class="pin-input" maxlength="6" placeholder="••••••" autocomplete="off" autocapitalize="characters">
+          <!-- El formulario real permite que el navegador ofrezca autocompletar el PIN guardado -->
+          <form id="form-login-familia" onsubmit="event.preventDefault(); intentarLoginFamilia();" autocomplete="on">
+            <input type="text" name="username" value="Familia" autocomplete="username" style="display:none" aria-hidden="true">
+            <input id="input-pin-familia" name="password" type="password" class="pin-input"
+              maxlength="6" placeholder="••••••"
+              autocomplete="current-password"
+              autocapitalize="characters"
+              inputmode="text"
+              style="letter-spacing:0.3em;font-size:1.5rem">
+          </form>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
             <input type="checkbox" id="recordar-familia" style="width:18px;height:18px"> Recordar en este dispositivo
           </label>
@@ -544,7 +553,20 @@ function renderLoginFamilias() {
     </div>
   `;
   const input = document.getElementById('input-pin-familia');
+
+  // Intentar autorellenar con credencial guardada (si el navegador lo permite)
+  if (window.PasswordCredential && navigator.credentials) {
+    navigator.credentials.get({ password: true, mediation: 'optional' })
+      .then(cred => {
+        if (cred && cred.password) {
+          input.value = cred.password.toUpperCase();
+        }
+      })
+      .catch(() => {}); // silencioso si no hay credencial o el usuario la descarta
+  }
+
   input.focus();
+  // Convertir a mayúsculas en tiempo real (el PIN es alfanumérico en mayúsculas)
   input.addEventListener('input', () => { input.value = input.value.toUpperCase(); });
   input.addEventListener('keydown', e => { if (e.key === 'Enter') intentarLoginFamilia(); });
 }
@@ -572,6 +594,18 @@ async function intentarLoginFamilia() {
     estado.nombreFamilia = fila.nombre_familia;
     const recordar = document.getElementById('recordar-familia')?.checked || false;
     guardarSesion(recordar);
+
+    // Ofrecer al navegador guardar la credencial (aparecerá el diálogo nativo de "¿Guardar contraseña?")
+    if (window.PasswordCredential && navigator.credentials) {
+      try {
+        const formEl = document.getElementById('form-login-familia');
+        if (formEl) {
+          const cred = new PasswordCredential(formEl);
+          await navigator.credentials.store(cred);
+        }
+      } catch (_) { /* silencioso: no todos los navegadores lo soportan en PWA */ }
+    }
+
     await cargarPanelFamilias();
   } catch (e) {
     errorBox.textContent = 'No se pudo comprobar el PIN. Inténtalo de nuevo.';
