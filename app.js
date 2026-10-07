@@ -1188,7 +1188,15 @@ function renderLoginProfesorado() {
           <h2>Acceso de tu clase</h2>
           <p class="ayuda">Introduce la clave de tu grupo</p>
           <div id="error-profesorado" class="mensaje-error"></div>
-          <input id="input-clave-profesorado" class="pin-input" placeholder="Ej. 4A" autocomplete="off" autocapitalize="characters">
+          <form id="form-login-profesorado" onsubmit="event.preventDefault(); intentarLoginProfesorado();" autocomplete="on">
+            <input type="text" name="username" value="Profesorado" autocomplete="username" style="display:none" aria-hidden="true">
+            <input id="input-clave-profesorado" name="password" type="password" class="pin-input"
+              maxlength="10" placeholder="Ej. 4A"
+              autocomplete="current-password"
+              autocapitalize="characters"
+              inputmode="text"
+              style="letter-spacing:0.2em;font-size:1.5rem">
+          </form>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
             <input type="checkbox" id="recordar-profesorado" style="width:18px;height:18px"> Recordar en este dispositivo
           </label>
@@ -1200,7 +1208,11 @@ function renderLoginProfesorado() {
   const input = document.getElementById('input-clave-profesorado');
   input.focus();
   input.addEventListener('input', () => { input.value = input.value.toUpperCase(); });
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') intentarLoginProfesorado(); });
+  if (window.PasswordCredential && navigator.credentials) {
+    navigator.credentials.get({ password: true, mediation: 'optional' })
+      .then(cred => { if (cred && cred.password) input.value = cred.password.toUpperCase(); })
+      .catch(() => {});
+  }
 }
 
 async function intentarLoginProfesorado() {
@@ -1226,6 +1238,12 @@ async function intentarLoginProfesorado() {
     estado.claseProfesoradoNombre = fila.clase_nombre;
     const recordar = document.getElementById('recordar-profesorado')?.checked || false;
     guardarSesion(recordar);
+    if (window.PasswordCredential && navigator.credentials) {
+      try {
+        const formEl = document.getElementById('form-login-profesorado');
+        if (formEl) await navigator.credentials.store(new PasswordCredential(formEl));
+      } catch (_) {}
+    }
     await cargarPanelProfesorado();
   } catch (e) {
     errorBox.textContent = 'No se pudo comprobar la clave. Inténtalo de nuevo.';
@@ -1434,7 +1452,15 @@ function renderLoginStaff() {
           <h2>Acceso del comedor</h2>
           <p class="ayuda">Introduce el código facilitado por el centro</p>
           <div id="error-staff" class="mensaje-error"></div>
-          <input id="input-pin-staff" class="pin-input" placeholder="••••••••" autocomplete="off">
+          <form id="form-login-staff" onsubmit="event.preventDefault(); intentarLoginStaff();" autocomplete="on">
+            <input type="text" name="username" value="Staff" autocomplete="username" style="display:none" aria-hidden="true">
+            <input id="input-pin-staff" name="password" type="password" class="pin-input"
+              maxlength="20" placeholder="••••••••"
+              autocomplete="current-password"
+              autocapitalize="characters"
+              inputmode="text"
+              style="letter-spacing:0.2em;font-size:1.5rem">
+          </form>
           <button class="btn-principal" onclick="intentarLoginStaff()">Entrar</button>
         </div>
       </div>
@@ -1442,7 +1468,12 @@ function renderLoginStaff() {
   `;
   const input = document.getElementById('input-pin-staff');
   input.focus();
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') intentarLoginStaff(); });
+  input.addEventListener('input', () => { input.value = input.value.toUpperCase(); });
+  if (window.PasswordCredential && navigator.credentials) {
+    navigator.credentials.get({ password: true, mediation: 'optional' })
+      .then(cred => { if (cred && cred.password) input.value = cred.password.toUpperCase(); })
+      .catch(() => {});
+  }
 }
 
 async function intentarLoginStaff() {
@@ -1465,6 +1496,12 @@ async function intentarLoginStaff() {
     }
     estado.pinStaff = pin;
     guardarSesion();
+    if (window.PasswordCredential && navigator.credentials) {
+      try {
+        const formEl = document.getElementById('form-login-staff');
+        if (formEl) await navigator.credentials.store(new PasswordCredential(formEl));
+      } catch (_) {}
+    }
     await cargarPanelStaff();
   } catch (e) {
     errorBox.textContent = 'No se pudo comprobar el código. Inténtalo de nuevo.';
@@ -1617,7 +1654,15 @@ function renderLoginAdmin() {
           <h2>Acceso de administración</h2>
           <p class="ayuda">Solo para la gestión del centro</p>
           <div id="error-admin" class="mensaje-error"></div>
-          <input id="input-pin-admin" class="pin-input" placeholder="••••••••" autocomplete="off">
+          <form id="form-login-admin" onsubmit="event.preventDefault(); intentarLoginAdmin();" autocomplete="on">
+            <input type="text" name="username" value="Admin" autocomplete="username" style="display:none" aria-hidden="true">
+            <input id="input-pin-admin" name="password" type="password" class="pin-input"
+              maxlength="20" placeholder="••••••••"
+              autocomplete="current-password"
+              autocapitalize="characters"
+              inputmode="text"
+              style="letter-spacing:0.2em;font-size:1.5rem">
+          </form>
           <button class="btn-principal azul" onclick="intentarLoginAdmin()">Entrar</button>
         </div>
       </div>
@@ -1625,7 +1670,12 @@ function renderLoginAdmin() {
   `;
   const input = document.getElementById('input-pin-admin');
   input.focus();
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') intentarLoginAdmin(); });
+  input.addEventListener('input', () => { input.value = input.value.toUpperCase(); });
+  if (window.PasswordCredential && navigator.credentials) {
+    navigator.credentials.get({ password: true, mediation: 'optional' })
+      .then(cred => { if (cred && cred.password) input.value = cred.password.toUpperCase(); })
+      .catch(() => {});
+  }
 }
 
 async function intentarLoginAdmin() {
@@ -1648,6 +1698,12 @@ async function intentarLoginAdmin() {
     }
     estado.pinAdmin = pin;
     guardarSesion();
+    if (window.PasswordCredential && navigator.credentials) {
+      try {
+        const formEl = document.getElementById('form-login-admin');
+        if (formEl) await navigator.credentials.store(new PasswordCredential(formEl));
+      } catch (_) {}
+    }
     await cargarPanelAdmin();
   } catch (e) {
     errorBox.textContent = 'No se pudo comprobar el PIN. Inténtalo de nuevo.';
