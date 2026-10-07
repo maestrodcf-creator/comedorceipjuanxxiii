@@ -158,6 +158,15 @@ function iniciales(nombre, apellidos) {
   return (n + a).toUpperCase();
 }
 
+function toggleVerCodigo(inputId, btnId) {
+  const inp = document.getElementById(inputId);
+  const btn = document.getElementById(btnId);
+  if (!inp) return;
+  const viendo = inp.type === 'text';
+  inp.type = viendo ? 'password' : 'text';
+  if (btn) btn.textContent = viendo ? '👁' : '🙈';
+}
+
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str ?? '';
@@ -537,12 +546,18 @@ function renderLoginFamilias() {
           <!-- El formulario real permite que el navegador ofrezca autocompletar el PIN guardado -->
           <form id="form-login-familia" onsubmit="event.preventDefault(); intentarLoginFamilia();" autocomplete="on">
             <input type="text" name="username" value="Familia" autocomplete="username" style="display:none" aria-hidden="true">
-            <input id="input-pin-familia" name="password" type="password" class="pin-input"
-              maxlength="6" placeholder="••••••"
-              autocomplete="current-password"
-              autocapitalize="characters"
-              inputmode="text"
-              style="letter-spacing:0.3em;font-size:1.5rem">
+            <div style="position:relative;width:100%;margin-bottom:12px">
+              <input id="input-pin-familia" name="password" type="password" class="pin-input"
+                maxlength="6" placeholder="••••••"
+                autocomplete="current-password"
+                autocapitalize="characters"
+                inputmode="text"
+                style="letter-spacing:0.3em;font-size:1.5rem;width:100%;padding-right:3rem">
+              <button type="button" onclick="toggleVerCodigo('input-pin-familia','ojo-familia')"
+                id="ojo-familia"
+                style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.3rem;padding:4px;line-height:1"
+                aria-label="Mostrar/ocultar código">👁</button>
+            </div>
           </form>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
             <input type="checkbox" id="recordar-familia" style="width:18px;height:18px"> Recordar en este dispositivo
@@ -1190,12 +1205,18 @@ function renderLoginProfesorado() {
           <div id="error-profesorado" class="mensaje-error"></div>
           <form id="form-login-profesorado" onsubmit="event.preventDefault(); intentarLoginProfesorado();" autocomplete="on">
             <input type="text" name="username" value="Profesorado" autocomplete="username" style="display:none" aria-hidden="true">
-            <input id="input-clave-profesorado" name="password" type="password" class="pin-input"
-              maxlength="10" placeholder="Ej. 4A"
-              autocomplete="current-password"
-              autocapitalize="characters"
-              inputmode="text"
-              style="letter-spacing:0.2em;font-size:1.5rem">
+            <div style="position:relative;width:100%;margin-bottom:12px">
+              <input id="input-clave-profesorado" name="password" type="password" class="pin-input"
+                maxlength="10" placeholder="Ej. 4A"
+                autocomplete="current-password"
+                autocapitalize="characters"
+                inputmode="text"
+                style="letter-spacing:0.2em;font-size:1.5rem;width:100%;padding-right:3rem">
+              <button type="button" onclick="toggleVerCodigo('input-clave-profesorado','ojo-prof')"
+                id="ojo-prof"
+                style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.3rem;padding:4px;line-height:1"
+                aria-label="Mostrar/ocultar código">👁</button>
+            </div>
           </form>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
             <input type="checkbox" id="recordar-profesorado" style="width:18px;height:18px"> Recordar en este dispositivo
@@ -1454,12 +1475,18 @@ function renderLoginStaff() {
           <div id="error-staff" class="mensaje-error"></div>
           <form id="form-login-staff" onsubmit="event.preventDefault(); intentarLoginStaff();" autocomplete="on">
             <input type="text" name="username" value="Staff" autocomplete="username" style="display:none" aria-hidden="true">
-            <input id="input-pin-staff" name="password" type="text" class="pin-input"
-              maxlength="20" placeholder="••••••••"
-              autocomplete="current-password"
-              autocapitalize="characters"
-              inputmode="text"
-              style="letter-spacing:0.2em;font-size:1.5rem">
+            <div style="position:relative;width:100%;margin-bottom:12px">
+              <input id="input-pin-staff" name="password" type="password" class="pin-input"
+                maxlength="20" placeholder="••••••••"
+                autocomplete="current-password"
+                autocapitalize="characters"
+                inputmode="text"
+                style="letter-spacing:0.2em;font-size:1.5rem;width:100%;padding-right:3rem">
+              <button type="button" onclick="toggleVerCodigo('input-pin-staff','ojo-staff')"
+                id="ojo-staff"
+                style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.3rem;padding:4px;line-height:1"
+                aria-label="Mostrar/ocultar código">👁</button>
+            </div>
           </form>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
             <input type="checkbox" id="recordar-staff" style="width:18px;height:18px"> Recordar en este dispositivo
@@ -1660,12 +1687,18 @@ function renderLoginAdmin() {
           <div id="error-admin" class="mensaje-error"></div>
           <form id="form-login-admin" onsubmit="event.preventDefault(); intentarLoginAdmin();" autocomplete="on">
             <input type="text" name="username" value="Admin" autocomplete="username" style="display:none" aria-hidden="true">
-            <input id="input-pin-admin" name="password" type="text" class="pin-input"
-              maxlength="20" placeholder="••••••••"
-              autocomplete="current-password"
-              autocapitalize="characters"
-              inputmode="text"
-              style="letter-spacing:0.2em;font-size:1.5rem">
+            <div style="position:relative;width:100%;margin-bottom:12px">
+              <input id="input-pin-admin" name="password" type="password" class="pin-input"
+                maxlength="20" placeholder="••••••••"
+                autocomplete="current-password"
+                autocapitalize="characters"
+                inputmode="text"
+                style="letter-spacing:0.2em;font-size:1.5rem;width:100%;padding-right:3rem">
+              <button type="button" onclick="toggleVerCodigo('input-pin-admin','ojo-admin')"
+                id="ojo-admin"
+                style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:1.3rem;padding:4px;line-height:1"
+                aria-label="Mostrar/ocultar código">👁</button>
+            </div>
           </form>
           <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
             <input type="checkbox" id="recordar-admin" style="width:18px;height:18px"> Recordar en este dispositivo
