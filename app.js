@@ -1454,13 +1454,16 @@ function renderLoginStaff() {
           <div id="error-staff" class="mensaje-error"></div>
           <form id="form-login-staff" onsubmit="event.preventDefault(); intentarLoginStaff();" autocomplete="on">
             <input type="text" name="username" value="Staff" autocomplete="username" style="display:none" aria-hidden="true">
-            <input id="input-pin-staff" name="password" type="password" class="pin-input"
+            <input id="input-pin-staff" name="password" type="text" class="pin-input"
               maxlength="20" placeholder="••••••••"
               autocomplete="current-password"
               autocapitalize="characters"
               inputmode="text"
               style="letter-spacing:0.2em;font-size:1.5rem">
           </form>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
+            <input type="checkbox" id="recordar-staff" style="width:18px;height:18px"> Recordar en este dispositivo
+          </label>
           <button class="btn-principal" onclick="intentarLoginStaff()">Entrar</button>
         </div>
       </div>
@@ -1495,7 +1498,8 @@ async function intentarLoginStaff() {
       return;
     }
     estado.pinStaff = pin;
-    guardarSesion();
+    const recordar = document.getElementById('recordar-staff')?.checked || false;
+    guardarSesion(recordar);
     if (window.PasswordCredential && navigator.credentials) {
       try {
         const formEl = document.getElementById('form-login-staff');
@@ -1656,13 +1660,16 @@ function renderLoginAdmin() {
           <div id="error-admin" class="mensaje-error"></div>
           <form id="form-login-admin" onsubmit="event.preventDefault(); intentarLoginAdmin();" autocomplete="on">
             <input type="text" name="username" value="Admin" autocomplete="username" style="display:none" aria-hidden="true">
-            <input id="input-pin-admin" name="password" type="password" class="pin-input"
+            <input id="input-pin-admin" name="password" type="text" class="pin-input"
               maxlength="20" placeholder="••••••••"
               autocomplete="current-password"
               autocapitalize="characters"
               inputmode="text"
               style="letter-spacing:0.2em;font-size:1.5rem">
           </form>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--marron-suave);margin-bottom:8px;cursor:pointer">
+            <input type="checkbox" id="recordar-admin" style="width:18px;height:18px"> Recordar en este dispositivo
+          </label>
           <button class="btn-principal azul" onclick="intentarLoginAdmin()">Entrar</button>
         </div>
       </div>
@@ -1697,7 +1704,8 @@ async function intentarLoginAdmin() {
       return;
     }
     estado.pinAdmin = pin;
-    guardarSesion();
+    const recordar = document.getElementById('recordar-admin')?.checked || false;
+    guardarSesion(recordar);
     if (window.PasswordCredential && navigator.credentials) {
       try {
         const formEl = document.getElementById('form-login-admin');
