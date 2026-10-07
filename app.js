@@ -881,8 +881,13 @@ function renderHistorialFamilia() {
 
   const hoyParaContador = hoyISO();
   const alumnosHtml = alumnos.map(({ alumno, registros: reg }) => {
-    // Solo contar días con confirmación explícita
-    const diasAsistidos = diasMes.filter(d => d.laborable && d.fecha >= FECHA_INICIO_COMEDOR && d.fecha <= hoyParaContador && reg[d.fecha] === true).length;
+    // Septiembre: solo cuenta si hay true explícito (mes de prueba/reset)
+    // Octubre en adelante: sin marcar = asistió
+    const diasAsistidos = diasMes.filter(d => {
+      if (!d.laborable || d.fecha < FECHA_INICIO_COMEDOR || d.fecha > hoyParaContador) return false;
+      if (d.fecha < '2026-10-01') return reg[d.fecha] === true;
+      return reg[d.fecha] !== false;
+    }).length;
     const diasNoAsistidos = diasMes.filter(d => d.laborable && d.fecha >= FECHA_INICIO_COMEDOR && reg[d.fecha] === false).length;
     const calHtml = renderCalendarioMesEditable(anyo, mes, diasMes, reg, alumno.id);
 
@@ -2106,8 +2111,13 @@ async function verHistorialAlumnoAdmin(alumnoId, nombreCompleto) {
       // Combinar registros originales con cambios pendientes
       const registrosConCambios = { ...mapaRegistros, ...cambiosPendientes };
       const hoyAdmin2 = hoyISO();
-      // Solo contar días con confirmación explícita
-      const diasAsistidos = diasMes.filter(d => d.laborable && d.fecha >= FECHA_INICIO_COMEDOR && d.fecha <= hoyAdmin2 && registrosConCambios[d.fecha] === true).length;
+      // Septiembre: solo cuenta si hay true explícito (mes de prueba/reset)
+      // Octubre en adelante: sin marcar = asistió
+      const diasAsistidos = diasMes.filter(d => {
+        if (!d.laborable || d.fecha < FECHA_INICIO_COMEDOR || d.fecha > hoyAdmin2) return false;
+        if (d.fecha < '2026-10-01') return registrosConCambios[d.fecha] === true;
+        return registrosConCambios[d.fecha] !== false;
+      }).length;
       const diasNo = diasMes.filter(d => d.laborable && d.fecha >= FECHA_INICIO_COMEDOR && registrosConCambios[d.fecha] === false).length;
       const edicion = estado.modoEdicionHistorial;
 
