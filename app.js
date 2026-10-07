@@ -197,6 +197,32 @@ async function rpc(nombre, params) {
 const TIEMPO_SESION = 20 * 60 * 1000; // 20 minutos
 const FECHA_INICIO_COMEDOR = '2026-09-10'; // Primer día de comedor del curso
 
+// ===== PINes recordados (pre-relleno del campo al volver al login) =====
+// Independiente de la sesión: persiste aunque la sesión caduque.
+
+function guardarPinRecordado(rol, pin) {
+  try {
+    const data = JSON.parse(localStorage.getItem('comedor_pines') || '{}');
+    data[rol] = pin;
+    localStorage.setItem('comedor_pines', JSON.stringify(data));
+  } catch (_) {}
+}
+
+function borrarPinRecordado(rol) {
+  try {
+    const data = JSON.parse(localStorage.getItem('comedor_pines') || '{}');
+    delete data[rol];
+    localStorage.setItem('comedor_pines', JSON.stringify(data));
+  } catch (_) {}
+}
+
+function leerPinRecordado(rol) {
+  try {
+    const data = JSON.parse(localStorage.getItem('comedor_pines') || '{}');
+    return data[rol] || null;
+  } catch (_) { return null; }
+}
+
 function guardarSesion(recordar = false) {
   const datos = {
     pinFamilia: estado.pinFamilia,
@@ -568,20 +594,12 @@ function renderLoginFamilias() {
     </div>
   `;
   const input = document.getElementById('input-pin-familia');
-
-  // Intentar autorellenar con credencial guardada (si el navegador lo permite)
-  if (window.PasswordCredential && navigator.credentials) {
-    navigator.credentials.get({ password: true, mediation: 'silent' })
-      .then(cred => {
-        if (cred && cred.password) {
-          input.value = cred.password.toUpperCase();
-        }
-      })
-      .catch(() => {}); // silencioso si no hay credencial guardada
+  const pinGuardado = leerPinRecordado('familia');
+  if (pinGuardado) {
+    input.value = pinGuardado;
+    document.getElementById('recordar-familia').checked = true;
   }
-
   input.focus();
-  // Convertir a mayúsculas en tiempo real (el PIN es alfanumérico en mayúsculas)
   input.addEventListener('input', () => { input.value = input.value.toUpperCase(); });
   input.addEventListener('keydown', e => { if (e.key === 'Enter') intentarLoginFamilia(); });
 }
@@ -609,18 +627,8 @@ async function intentarLoginFamilia() {
     estado.nombreFamilia = fila.nombre_familia;
     const recordar = document.getElementById('recordar-familia')?.checked || false;
     guardarSesion(recordar);
-
-    // Ofrecer al navegador guardar la credencial (aparecerá el diálogo nativo de "¿Guardar contraseña?")
-    if (window.PasswordCredential && navigator.credentials) {
-      try {
-        const formEl = document.getElementById('form-login-familia');
-        if (formEl) {
-          const cred = new PasswordCredential(formEl);
-          await navigator.credentials.store(cred);
-        }
-      } catch (_) { /* silencioso: no todos los navegadores lo soportan en PWA */ }
-    }
-
+    if (recordar) guardarPinRecordado('familia', pin);
+    else borrarPinRecordado('familia');
     await cargarPanelFamilias();
   } catch (e) {
     errorBox.textContent = 'No se pudo comprobar el PIN. Inténtalo de nuevo.';
@@ -1227,13 +1235,13 @@ function renderLoginProfesorado() {
     </div>
   `;
   const input = document.getElementById('input-clave-profesorado');
+  const pinGuardado = leerPinRecordado('profesorado');
+  if (pinGuardado) {
+    input.value = pinGuardado;
+    document.getElementById('recordar-profesorado').checked = true;
+  }
   input.focus();
   input.addEventListener('input', () => { input.value = input.value.toUpperCase(); });
-  if (window.PasswordCredential && navigator.credentials) {
-    navigator.credentials.get({ password: true, mediation: 'silent' })
-      .then(cred => { if (cred && cred.password) input.value = cred.password.toUpperCase(); })
-      .catch(() => {});
-  }
 }
 
 async function intentarLoginProfesorado() {
@@ -1259,12 +1267,8 @@ async function intentarLoginProfesorado() {
     estado.claseProfesoradoNombre = fila.clase_nombre;
     const recordar = document.getElementById('recordar-profesorado')?.checked || false;
     guardarSesion(recordar);
-    if (window.PasswordCredential && navigator.credentials) {
-      try {
-        const formEl = document.getElementById('form-login-profesorado');
-        if (formEl) await navigator.credentials.store(new PasswordCredential(formEl));
-      } catch (_) {}
-    }
+    if (recordar) guardarPinRecordado('profesorado', clave);
+    else borrarPinRecordado('profesorado');
     await cargarPanelProfesorado();
   } catch (e) {
     errorBox.textContent = 'No se pudo comprobar la clave. Inténtalo de nuevo.';
@@ -1497,13 +1501,13 @@ function renderLoginStaff() {
     </div>
   `;
   const input = document.getElementById('input-pin-staff');
+  const pinGuardado = leerPinRecordado('staff');
+  if (pinGuardado) {
+    input.value = pinGuardado;
+    document.getElementById('recordar-staff').checked = true;
+  }
   input.focus();
   input.addEventListener('input', () => { input.value = input.value.toUpperCase(); });
-  if (window.PasswordCredential && navigator.credentials) {
-    navigator.credentials.get({ password: true, mediation: 'silent' })
-      .then(cred => { if (cred && cred.password) input.value = cred.password.toUpperCase(); })
-      .catch(() => {});
-  }
 }
 
 async function intentarLoginStaff() {
@@ -1527,12 +1531,8 @@ async function intentarLoginStaff() {
     estado.pinStaff = pin;
     const recordar = document.getElementById('recordar-staff')?.checked || false;
     guardarSesion(recordar);
-    if (window.PasswordCredential && navigator.credentials) {
-      try {
-        const formEl = document.getElementById('form-login-staff');
-        if (formEl) await navigator.credentials.store(new PasswordCredential(formEl));
-      } catch (_) {}
-    }
+    if (recordar) guardarPinRecordado('staff', pin);
+    else borrarPinRecordado('staff');
     await cargarPanelStaff();
   } catch (e) {
     errorBox.textContent = 'No se pudo comprobar el código. Inténtalo de nuevo.';
@@ -1709,13 +1709,13 @@ function renderLoginAdmin() {
     </div>
   `;
   const input = document.getElementById('input-pin-admin');
+  const pinGuardado = leerPinRecordado('admin');
+  if (pinGuardado) {
+    input.value = pinGuardado;
+    document.getElementById('recordar-admin').checked = true;
+  }
   input.focus();
   input.addEventListener('input', () => { input.value = input.value.toUpperCase(); });
-  if (window.PasswordCredential && navigator.credentials) {
-    navigator.credentials.get({ password: true, mediation: 'silent' })
-      .then(cred => { if (cred && cred.password) input.value = cred.password.toUpperCase(); })
-      .catch(() => {});
-  }
 }
 
 async function intentarLoginAdmin() {
@@ -1739,12 +1739,8 @@ async function intentarLoginAdmin() {
     estado.pinAdmin = pin;
     const recordar = document.getElementById('recordar-admin')?.checked || false;
     guardarSesion(recordar);
-    if (window.PasswordCredential && navigator.credentials) {
-      try {
-        const formEl = document.getElementById('form-login-admin');
-        if (formEl) await navigator.credentials.store(new PasswordCredential(formEl));
-      } catch (_) {}
-    }
+    if (recordar) guardarPinRecordado('admin', pin);
+    else borrarPinRecordado('admin');
     await cargarPanelAdmin();
   } catch (e) {
     errorBox.textContent = 'No se pudo comprobar el PIN. Inténtalo de nuevo.';
